@@ -166,19 +166,131 @@ impl AgentMail {
             Err(_) => Err(Erro::Rede),
         }
     }
+}
 
-    
-/// Estado HTTP de um pedido, sem consumir a resposta. Para os testes que so
-    /// precisam de saber se passou ou falhou.
-    pub fn estado_de(&self, metodo: &str, caminho: &str, corpo: Option<&str>) -> Result<u16, Erro> {
+/// Resposta crua de um pedido, com tudo o que a API devolveu.
+pub struct RespostaBruta {
+    pub estado: u16,
+    pub code: String,
+    pub mensagem: String,
+    /// Corpo completo, so preenchido em respostas 2xx.
+    pub corpo: String,
+}
+
+/// Um passo de um teste, para mostrar ao utilizador o que aconteceu.
+pub struct Passo {
+    pub nome: &'static str,
+    pub resposta: RespostaBruta,
+}
+
+impl RespostaBruta {
+    /// Resumo numa linha, sem nada de secreto.
+    pub fn resumo(&self) -> String {
+        let c = if self.code.is_empty() { "-" } else { self.code.as_str() };
+        let m = if self.mensagem.is_empty() { "-" } else { self.mensagem.as_str() };
+        format!("estado {} | code: {} | {}", self.estado, c, m)
+    }
+}
+
+impl AgentMail {
+    /// Pedido que nunca devolve erro: quer-se sempre o estado e o que a API
+    /// disse, mesmo no 4xx e no 5xx.
+    pub fn pedir(&self, metodo: &str, caminho: &str, corpo: Option<&str>) -> RespostaBruta {
         match self.enviar(metodo, caminho, corpo) {
-            Ok(_) => Ok(200),
-            Err(Erro::Api { estado, .. }) => Ok(estado),
-            Err(Erro::RespostaInesperada { estado }) => Ok(estado.unwrap_or(0)),
-            Err(Erro::NaoEncontrado) => Ok(404),
-            Err(Erro::CredenciaisInvalidas) => Ok(401),
-            Err(e) => Err(e),
+            Ok(texto) => RespostaBruta {
+                estado: 200,
+                code: String::new(),
+                mensagem: String::new(),
+                corpo: texto,
+            },
+            Err(Erro::Api { estado, code, mensagem }) => RespostaBruta {
+                estado,
+                code,
+                mensagem,
+                corpo: String::new(),
+            },
+            Err(Erro::CredenciaisInvalidas) => RespostaBruta {
+                estado: 401,
+                code: String::new(),
+                mensagem: "api key invalida".into(),
+                corpo: String::new(),
+            },
+            Err(Erro::NaoEncontrado) => RespostaBruta {
+                estado: 404,
+                code: "not_found".into(),
+                mensagem: String::new(),
+                corpo: String::new(),
+            },
+            Err(Erro::NomeJaExiste) => RespostaBruta {
+                estado: 409,
+                code: "already_exists".into(),
+                mensagem: String::new(),
+                corpo: String::new(),
+            },
+            Err(Erro::RespostaInesperada { estado }) => RespostaBruta {
+                estado: estado.unwrap_or(0),
+                code: String::new(),
+                mensagem: String::new(),
+                corpo: String::new(),
+            },
+            Err(_) => RespostaBruta {
+                estado: 0,
+                code: String::new(),
+                mensagem: "erro de rede".into(),
+                corpo: String::new(),
+            },
         }
+    }
+
+    /// Tenta apagar a inbox com a key que for passada, escalando se a API
+    /// recusar por conflito.
+    ///
+    /// O 409 nao prova que a key apaga a inbox: prova so que o pedido foi
+    /// aceite e havia keys em cima. Por isso, quando da 409, o teste tenta
+    /// apagar essas keys com a mesma key e repete o DELETE. So assim se sabe
+    /// se a key consegue destruir a conta.
+    pub fn apagar_com_key(&self, inbox_id: &str) -> Vec<Passo> {
+        let mut passos = Vec::new();
+        let alvo = format!("/v0/inboxes/{}", inbox_id);
+
+        let primeira = self.pedir("DELETE", &alvo, None);
+        passos.push(Passo {
+            nome: "DELETE directo na inbox",
+            resposta: primeira,
+        });
+
+        if passos[0].resposta.estado != 409 {
+            return passos;
+        }
+
+        // Houve conflito: a inbox tem keys. Tentar limpá-las com esta key.
+        let lista = self.pedir("GET", &format!("{}/api-keys", alvo), None);
+        passos.push(Passo {
+            nome: "GET das keys da inbox",
+            resposta: RespostaBruta {
+                corpo: lista.corpo.clone(),
+                ..lista
+            },
+        });
+
+        if lista.estado == 200 {
+            let ids = AgentMail::ids_de_keys(&lista.corpo);
+            for id in &ids {
+                let r = self.pedir("DELETE", &format!("{}/api-keys/{}", alvo, id), None);
+                passos.push(Passo {
+                    nome: "DELETE de uma key da inbox",
+                    resposta: r,
+                });
+            }
+        }
+
+        let segunda = self.pedir("DELETE", &alvo, None);
+        passos.push(Passo {
+            nome: "DELETE repetido, sem as keys",
+            resposta: segunda,
+        });
+
+        passos
     }
 
     /// Cria uma key restrita numa inbox que ja existe, e devolve o valor.

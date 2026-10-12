@@ -161,6 +161,18 @@ fn main() {
         return;
     }
 
+    // `testar-chave` usa uma key restrita, não a de organização. Pedir a de
+    // organização aqui seria exigir a key errada.
+    if a.comando == "testar-chave" {
+        match cmd_testar_chave(&a) {
+            Ok(()) => return,
+            Err(e) => {
+                eprintln!("erro: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // Daqui para baixo e preciso da API key.
     let cofre = CofreWindows;
     let chave = match cofre::ler_api_key(&cofre) {
@@ -182,7 +194,7 @@ fn main() {
         "criar" => cmd_criar(&f, &a, &cofre),
         "apagar" => cmd_apagar(&f, &a),
         "trocar" => cmd_trocar(&f, &a),
-        "testar-chave" => cmd_testar_chave(&a),
+        "testar-chave" => unreachable!("tratado antes de pedir a key de organizacao"),
         "criar-chave" => cmd_criar_chave(&a),
         outro => Err(format!(
             "comando desconhecido: {}. Vê `accmaker ajuda`.",
@@ -221,29 +233,57 @@ fn cmd_testar_chave(a: &Args) -> Result<(), String> {
     };
 
     let cliente = agentmail::com_chave(chave);
-    println!("A testar se a key restrita apaga a propria inbox...");
+    println!("Inbox: {}", id);
+    println!("A testar o que a key restrita dela consegue fazer...");
+    println!();
 
-    // DELETE na propria inbox, com a key restrita dela.
-    let caminho = format!("/v0/inboxes/{}", id);
-    match cliente.estado_de("DELETE", &caminho, None) {
-        Ok(codigo) if (200..300).contains(&codigo) => {
-            println!();
-            println!("RESULTADO: a key restrita APAGA a propria inbox.");
-            println!("Isto muda o desenho da janela: a key nao pode ficar");
-            println!("visivel no ecra, so um botao de copiar.");
-        }
-        Ok(codigo) => {
-            println!();
-            println!("RESULTADO: a key restrita NAO apaga a inbox (estado {}).", codigo);
-            println!("A conta nao pode ser destruida por quem tenha so a key,");
-            println!("por isso mostra-la no ecra e aceitavel.");
-        }
-        Err(e) => {
-            println!();
-            println!("RESULTADO: inconclusive ({})", e);
-            println!("A inbox pode ter ficado orfa. Confirma com `accmaker listar`.");
-        }
+    let passos = cliente.apagar_com_key(&id);
+    let mut ultimo: Option<&agentmail::Passo> = None;
+    for p in &passos {
+        println!("[{}] {}", p.nome, p.resposta.resumo());
+        ultimo = Some(p);
     }
+    let fim = match ultimo {
+        Some(p) => p.resposta.estado,
+        None => 0,
+    };
+    println!();
+    println!("INTERPRETACAO");
+    println!();
+
+    if fim == 403 || fim == 401 {
+        println!("A key restrita NAO consegue apagar a inbox.");
+        println!("A API recusou o pedido. Quem tenha a key nao consegue");
+        println!("destruir a conta, por isso mostra-la no ecra e aceitavel.");
+    } else if (200..300).contains(&fim) {
+        println!("A key restrita APAGOU a inbox.");
+        println!("Isto e um risco: quem tenha a key consegue destruir a conta.");
+        println!("A janela nao deve mostrar a key em claro, so um botao copiar.");
+    } else if passos.iter().any(|p| p.resposta.estado == 409) {
+        println!("A inbox tem keys em cima e nao se deixou apagar.");
+        println!("O 409 nao prova nada: so diz que houve conflito.");
+        if let Some(p) = passos.iter().find(|p| p.nome.contains("DELETE de uma key")) {
+            println!();
+            println!("Ao tentar apagar as keys com a propria key restrita:");
+            println!("  {}", p.resposta.resumo());
+            println!();
+            if p.resposta.estado == 403 || p.resposta.estado == 401 {
+                println!("A key NAO apaga as keys. Logo NAO consegue destruir a conta.");
+                println!("Mostrar a key no ecra e aceitavel.");
+            } else {
+                println!("A key mexe nas keys da inbox. O DELETE final deu {}:", fim);
+                println!("consulta os passos acima para o codigo exacto.");
+            }
+        } else {
+            println!("Nao foi possivel nem listar as keys da inbox com esta key.");
+            println!("A key parece ter poucas permissoes. Trata como \"nao apaga\".");
+        }
+    } else {
+        println!("Resultado inconclusivo (estado final {}).", fim);
+        println!("Confirma o estado com `accmaker listar`.");
+    }
+    println!();
+    println!("A key nao foi impressa nem registada.");
     Ok(())
 }
 
