@@ -16,7 +16,7 @@ de CAPTCHA/SMS.
 |---|---|---|---|---|---|---|---|---|---|
 | Cria mailbox real com password do chamador | **Sim** (`createUser` com `password`) | **Sim** (`POST .../mailboxes` com `password`) | **Sim** (`POST /mailboxes` com `password`) | Sim | Sim (via JMAP `Account/set`) | Sim | Sim | Sim (com licença) | **Não** (sem API de provisioning) |
 | Domínio próprio obrigatório | Quase (há domínios partilhados `purelymail.com`) | **Sim** | **Sim** | **Sim** | **Sim** | **Sim** + conta Zoho paga | **Sim** + Workspace | **Sim** + tenant M365 | Não (domínios próprios, mas sem API admin) |
-| Custo | **$10/ano flat** (plano Simple), sem limite de users/domínios | $19/ano (Micro) a $29/mês (Standard); mailboxes ilimitadas | $9/ano, $0,40/GB/yr acima de 10 GB | Grátis (custo é o servidor) | Grátis (custo é o servidor) | ~$1,20/utilizador/mês (Mail Lite) | $7/utilizador/mês (Business Starter) | ~$6/utilizador/mês | ~$3–40/utilizador/mês |
+| Custo | **$10/ano flat** (plano Simple), sem limite de users/domínios | $19/ano (Micro) ou $9/mês (Standard, $90/ano); mailboxes ilimitadas | $9/ano, $0,40/GB/yr acima de 10 GB | Grátis (custo é o servidor) | Grátis (custo é o servidor) | ~$1,20/utilizador/mês (Mail Lite) | $7/utilizador/mês (Business Starter) | ~$6/utilizador/mês | ~$3–40/utilizador/mês |
 | Limites de password documentados | Não documentados; sem mínimo imposto pela API | Não documentados | Validação por campo; não documentada no resumo | Validação no servidor Dovecot | Política configurável (enterprise) | Política da organização | Política do domínio | Política do tenant | n/a |
 | Autenticação | **API key em header** (`Purelymail-Api-Token`), sem OAuth | HTTP Basic (email da conta + API key) | **Bearer token** de management key | Header `X-API-Key` ou `Authorization: Bearer` | Bearer / Basic contra `/jmap` | OAuth 2.0 (client ID/secret + refresh) | OAuth 2.0 (service account) | OAuth 2.0 (client credentials) | OAuth 2.0 + JMAP |
 | Sem servidor próprio / sem browser | **Sim, ideal** | **Sim** | **Sim** | Não | Não | Parcialmente (OAuth exige registo prévio) | Não | Não | Não |
@@ -50,9 +50,28 @@ Porque:
 4. `listUser` e `listDomains` dão verificação de disponibilidade antes de criar.
 5. API exclusivamente `POST` com JSON — cliente HTTP minúsculo, quase zero dependências.
 
-Ressalva: a documentação pública em `purelymail.com/docs` é sobretudo de cliente de
-email; a especificação da API está disponível como swagger no endpoint da API. Convém
-fixar o payload validado com um teste real antes de depender dele.
+**Estado de verificação desta recomendação:**
+
+| Aspeto | Estado | Fonte |
+|---|---|---|
+| Preço ($10/ano, sem limites) | **Confirmado** | <https://purelymail.com/pricing> |
+| Termos (ver secção 6) | **Confirmado** | <https://purelymail.com/termsofservice> |
+| Existência da API `createUser` | **NÃO verificada em fonte primária** | ver abaixo |
+| Limites de password | **Desconhecidos** | nenhum |
+
+Ressalva importante: **não existe documentação oficial da API no site do Purelymail.**
+Verificado em 2026-10-12:
+- `purelymail.com/docs` — índice oficial, **sem qualquer página de API** (só setup,
+  domínios, users, routing, filtros, FAQ).
+- `purelymail.com/api/v0/swagger.json` — **404**.
+- Sem página de API referenciada em qualquer lado do site ou da documentação.
+
+Tudo o que sabemos sobre `createUser` vem de **terceiros**: a extensão oficial da
+Raycast e MCP servers da comunidade. É consistente entre si e usa um payload plausível,
+mas não é fonte primária e pode estar desactualizado ou errado.
+
+Não escrever o cliente da API contra esta fonte sem antes de obter confirmação
+oficial (ver secção 6).
 
 ### Alternativa — Migadu
 
@@ -61,7 +80,7 @@ Docs: <https://migadu.com/api> · Preços: <https://migadu.com/pricing>
 API REST classical, HTTP Basic (email da conta + API key), referência completa com
 exemplos `curl`. Mailboxes ilimitadas em todos os planos, Micro a $19/ano. É a opção
 mais conservadora e a melhor se a documentação do Purelymail não estiver acessível.
-Ressalva: a própria Migadu descreve a API como "still in early beta".
+Ressalva grave: os Termos do Migadu **proíbem automação**. Ver secção 6.
 
 ### Terceira opção — Mailcow (self-hosted)
 
@@ -139,27 +158,103 @@ Auth: header `X-API-Key: <KEY>` (ou `Authorization: Bearer <KEY>`, conforme vers
 
 | Risco | Impacto | Mitigação no AccMaker |
 |---|---|---|
-| **API do Purelymail é "beta" / não documentada no site** | Endpoint ou payload podem mudar | `--dry-run` obrigatório; camada de cliente isolada; validar com uma chamada real antes de usar |
-| **Mínimo de password não documentado** | Gerador de 6 chars pode ser rejeitado | Definir slider com mínimo conservador (8) e testar empiricamente os limites antes de fixar |
+| **API do Purelymail não documentada em fonte primária** | Endpoint ou payload podem não existir ou ter mudado | Não escrever o cliente antes da resposta do suporte (secção 8); `--dry-run` sempre; cliente isolado atrás da interface `provider` |
+| **Mínimo/máximo de password desconhecidos** | Slider fica sem valor por definir | `provider.max_password_length` fica vazio até haver resposta oficial; a app não depende dele |
+| **Migadu proíbe "automation of any kind"** | Usar o Migadu seria violar os termos | **Não usar.** Ver secção 6 |
 | Domínio próprio não verificado (MX/SPF/DKIM) | Mailbox criada mas sem receber correio | Mostrar estado do domínio na app; avisar antes de criar |
 | API key comprometida | Criação de mailboxes em nome do utilizador | Chave fora do `.exe` (em `%APPDATA%\AccMaker\`), nunca em logs, nunca no git |
 | Limites de taxa não publicados | Falhas em massa ao gerar várias contas | Criação sequencial com pequeno atraso e retry com backoff; respeitar `Retry-After` |
-| ToS do FranklyMail proíbe revenda/serviço a terceiros | Usar apenas para as mailboxes do próprio utilizador | Não Adoptar como fornecedor principal sem o utilizador assumir isso por escrito |
-| Mecânica de definição da `password` após criação | Migadu/Purelymail não devolvem a password | Guardar o par email+password localmente no momento da criação, nunca no repo |
+| ToS do FranklyMail proíbe revenda/serviço a terceiros | Usar apenas para as mailboxes do próprio utilizador | Não adotar como fornecedor principal sem o utilizador assumir isso por escrito |
+| Password não devolvida após criação | Perder a password gerada | Guardar o par email+password no momento da criação, nunca no repo |
 
 ### Custos para o utilizador
 
-- Purelymail: $10/ano (≈ €9/ano), flat, sem limite de mailboxes.
-- Migadu: $19/ano (Micro) ou $90/ano (Standard).
+- **Purelymail: $10/ano** (plano Simple, confirmado). Sem limite de mailboxes — o custo
+  não cresce com o número de contas criadas.
+- Migadu: $19/ano (Micro) ou $90/ano (Standard) — **riscado** por termos.
 - Mailcow: apenas o custo do servidor (VPS a partir de ~$5/mês).
 - Domínio: ~$10/ano, obrigatório em todos os cenários (salvo domínios partilhados).
 
 ---
 
-## 5. Decisão
+## 6. Termos: criação automatizada de mailboxes
 
-Adotar **Purelymail** como fornecedor principal, com **Migadu** como alternativa
-documentada. O cliente de API deve ser escrito contra uma interface pequena
-(`listarDominios`, `verificarUsername`, `criarMailbox`) para que trocar de fornecedor
-seja só acrescentar uma implementação, sem tocar na interface nem no gerador de
-passwords.
+Esta é a questão decisiva, e a resposta **não é a que se esperava**. O AccMaker faz
+exatamente isto: criar mailboxes de forma automatizada. O que dizem os termos:
+
+### Purelymail — <https://purelymail.com/termsofservice> (verificado 2026-10-12)
+
+Os termos **não mencionam automação nem criação automatizada de contas**. O que
+proíbem é explicitamente:
+
+> "You agree to not use the Service to send junk mail, spam, mailing list emails, or any
+> other forms of unsolicited emails, and to not send emails for the purposes of
+> advertising, phishing, spreading malware or viruses, or **domain reputation warming**."
+
+Ou seja: a proibição é sobre **o que se envia**, não sobre **quantas mailboxes se criam**.
+Não encontrei cláusula que proíba automatizar a gestão da própria conta. Os termos
+também não mencionam a API em lado nenhum.
+
+Leitura: **compatível**, para uso próprio no próprio domínio, desde que a app não envie
+spam nem faça aquecimento de reputação.
+
+### Migadu — <https://migadu.com/use> (verificado 2026-10-12)
+
+Isto é o oposto, e é explícito:
+
+> "Migadu.com is a personal email service, intended to be used by **humans for
+> non-automated** personal or business correspondence. **We do not allow bulk mailing,
+> newsletters, automation of any kind**, chain emails or transactional emails."
+
+A secção **Acceptable Use** do Migadu diz literalmente "automation of any kind". O
+AccMaker é, na sua função essencial, automação. Isto não é um risco teórico — é uma
+cláusula que cobre diretamente o caso de uso.
+
+Os Termos do Migadu acrescentam que pode terminar a conta "**without cause or notice**",
+e que contas encontradas a gerar spam são "immediately blocked" com penalização
+até $500.
+
+Leitura: **incompatível** com o AccMaker no estado atual.
+
+### Consequência
+
+O Migadu deixa de ser a alternativa séria que parecia. Passa a estar riscado por
+falta de compatibilidade de termos, independentemente de a API ser bem documentada.
+
+Isto inverte a recomendação: o fornecedor com a API **não** confirmada em fonte primária
+(Purelymail) tem termos compatíveis, e o fornecedor com a API perfeitamente
+documentada (Migadu) tem termos que a proíbem.
+
+## 7. Decisão
+
+**Fornecedor: Purelymail, pendente de confirmação oficial.**
+
+O Purelymail passa a ser o único candidato com termos compatíveis com o caso de uso.
+A API continua **não verificada em fonte primária**, pelo que o cliente só deve ser
+escrito depois da resposta do suporte (secção 8).
+
+O Migadu está **riscado** por incompatibilidade de termos, apesar de a API ser
+perfeitamente documentada. Continua documentado neste ficheiro para referência, mas
+**não deve ser usado**.
+
+### Arquitetura independentemente do fornecedor
+
+O cliente de API fica atrás de uma interface pequena — um `provider` com
+`check_username` e `create_mailbox` — para que trocar de fornecedor seja só acrescentar
+uma implementação, sem tocar na interface nem no gerador de passwords.
+
+O **tamanho máximo da password passa a ser um valor por fornecedor**, exposto por
+`provider.max_password_length`, que o slider lê. Fica vazio (ou por definir) até haver
+resposta oficial; o gerador e a interface não dependem dele.
+
+## 8. Pergunta em aberto ao suporte do Purelymail
+
+Enviada por email (suporte@purelymail.com), a aguardar resposta:
+
+> 1. What are the minimum and maximum password length accepted by `createUser`, and are
+>    there any restrictions on special characters?
+> 2. Is the API (`/api/v0/createUser`) supported and intended for use by account owners
+>    to manage their own mailboxes in bulk, or is it subject to restrictions?
+
+A resposta a (1) define o máximo do slider. A resposta a (2) decide se o Purelymail é
+viável.
