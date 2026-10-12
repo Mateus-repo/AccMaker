@@ -16,6 +16,8 @@ permanente** através da API de um fornecedor. No fim mostra email + password co
   **Nunca** usar serviços de email temporário/descartável.
 - O `provider` recebe o **domínio como parâmetro**, para poder usar um domínio próprio
   ou um domínio partilhado sem alterar código.
+- **Nunca** criar contas ou organizações múltiplas num fornecedor para contornar um
+  limite de plano. É contra o espírito da oferta gratuita e arrisca perder tudo.
 - **Não implementar** bypass de CAPTCHA, verificação por telemóvel, rotação de IPs ou automação de
   sign-up em Gmail/Outlook/Yahoo e afins. Só APIs oficiais de administração de mailboxes.
 - Passwords geradas com **RNG criptográfico** (nunca `rand` normal). Nunca escrever passwords/API keys em logs.
@@ -27,6 +29,7 @@ permanente** através da API de um fornecedor. No fim mostra email + password co
 | Skill | Quando usar |
 |---|---|
 | `pesquisar-api-email` | No início do projeto ou quando for preciso trocar/validar o fornecedor de API de email |
+| `provider-agentmail` | Ao implementar ou alterar o fornecedor AgentMail: inboxes, slots, chaves, interface de contas |
 | `build-exe-leve` | Escolha da linguagem, flags de compilação e verificação do tamanho do .exe |
 | `estilizacao` | Sempre que mexeres na interface (cores, layout, tipografia) |
 | `progresso` | **No fim de cada tarefa**: atualizar `progresso.md` |

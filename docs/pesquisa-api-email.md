@@ -8,6 +8,11 @@ Excluídos por regra do projeto: mail.tm, Guerrilla Mail, 10MinuteMail e restant
 temporários/descartáveis; automação de sign-up em Gmail/Outlook/Yahoo; qualquer bypass
 de CAPTCHA/SMS.
 
+> **Mudança de requisitos (2026-10-12).** O requisito passou a ser **gratuito**. Isso
+> muda o que esta pesquisa procura. A secção 9 documenta o fornecedor escolhido — o
+> **AgentMail** — e o que ele é e não é. As secções 1 a 8 ficam como registo da pesquisa
+> original, cujo requisito era ter mailboxes próprias e ilimitadas.
+
 ---
 
 ## 1. Tabela comparativa
@@ -337,3 +342,97 @@ Quando abrires a conta (o trial dá créditos limitados), o teste real é: criar
 mailbox de teste, experimentar passwords curtas e longas para descobrir os limites, e
 apagar com `deleteUser`. A API key fica só em variável de ambiente — nunca no chat,
 nunca no repositório.
+
+---
+
+## 9. Fornecedor escolhido: AgentMail (plano grátis)
+
+Escolhido porque o requisito passou a ser **gratuito**. Não é um fornecedor de email
+pessoal: é um fornecedor de **inboxes para agentes**, e a diferença importa.
+
+### Preço, confirmado em <https://agentmail.to/pricing> (2026-10-12)
+
+| Plano | Preço | Inboxes | Emails/mês | Emails/dia | Armazenamento | Domínios próprios |
+|---|---|---|---|---|---|---|
+| **Free** | **$0/mês** | **3** | 3 000 | 100 | 3 GB | **Não** |
+| Developer | $20/mês | 10 | 10 000 | 1 000 | 10 GB | 10 |
+| Startup | $200/mês | 150 | 150 000 | 1 500 | — | 150 |
+
+Sem cartão de crédito no plano Free. Confirmado também por várias fontes de terceiros
+(Blog do AgentMail, PrimeForge, UseCarly, Dead Simple) — todas coincidem com a página
+oficial.
+
+### API, confirmada contra a documentação oficial
+
+Base `https://api.agentmail.to`, autenticação `Authorization: Bearer <API key>`.
+Especificação completa em <https://docs.agentmail.to/openapi.json>.
+
+| Operação | Endpoint |
+|---|---|
+| Listar | `GET /v0/inboxes` |
+| Obter | `GET /v0/inboxes/:inbox_id` |
+| Criar | `POST /v0/inboxes` (com `username`, `domain`, `display_name`, `client_id`, `status`, `metadata`) |
+| Apagar | `DELETE /v0/inboxes/:inbox_id` |
+| Criar API key restrita | `POST /v0/inboxes/{inbox_id}/api-keys` |
+
+`domain` tem de ser um domínio verificado; omitido, assume `agentmail.to`.
+`client_id` permite repetir o pedido sem criar duplicados — é a base do `trocar` seguro.
+
+Exemplo, sem chaves reais:
+
+```bash
+curl -X POST https://api.agentmail.to/v0/inboxes \
+  -H "Authorization: Bearer <API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"minha-conta","display_name":"accmaker","client_id":"<UUID>"}'
+```
+
+### O que este fornecedor é, e o que não é
+
+Isto é a parte que a app tem de dizer com clareza ao utilizador.
+
+**É:**
+- Uma inbox real, com endereço real (`nome@agentmail.to`), que recebe e envia email.
+- Permanente: **não expira**. A política de expiração de mensagens ao fim de 24 horas
+  existe (<https://docs.agentmail.to/message-expiry>) mas é **opcional, por organização
+  e desligada por omissão**, só se ativa contacting a equipa. Confirmado.
+- Criável e apagável por API a qualquer momento, o que permite trocar uma conta por outra.
+
+**Não é:**
+- **Não há password.** A password do IMAP e do SMTP é uma **API key**. Se essa key for
+  apagada ou expirar, a conta fica inutilizável e não há recuperação. Por isso o
+  AccMaker tem de guardar a key restrita no Credential Manager do Windows, senão um erro
+  do utilizador destrói a conta sem volta.
+- **Não é domínio próprio** no plano grátis. O endereço fica em `@agentmail.to`.
+- **As mensagens enviadas levam o rodapé "Sent via AgentMail"**, que só os planos pagos
+  removem.
+- **Não é ilimitado**: 3 inboxes, 100 emails/dia. Serve para uso pessoal com limites.
+- **Foi feito para agentes de IA e testes**, não para contas pessoais.
+
+### Limites e termos
+
+A skill `provider-agentmail` proíbe explicitamente criar contas ou organizações
+múltiplas para contornar o limite de 3. O mesmo está agora no `AGENTS.md`. Não é uma
+questão de preço: é contra o espírito da oferta gratuita e arrisca a perda de todas as
+inboxes.
+
+### Comparação com o Purelymail
+
+| | AgentMail Free | Purelymail Simple |
+|---|---|---|
+| Preço | **$0** | $10/ano |
+| Inboxes | 3 | ilimitadas |
+| Password definida por ti | **Não** (é uma API key) | **Sim** |
+| Domínio | `agentmail.to` só | próprio ou partilhado |
+| Rodapé nas mensagens enviadas | Sim | Não |
+| Rodapé / limite de envio | 100/dia | sem limite rígido |
+| Good para | experimentar, agentes, uso pessoal limitado | ter as tuas contas a sério |
+
+### A verificar com um teste real
+
+Ver a secção "A verificar com um teste real" da skill `provider-agentmail`. Resumo:
+se apagar liberta a vaga logo, se o username se pode reutilizar, que erro dá a 4.ª
+inbox, se a key restrita funciona em IMAP no plano grátis, e se só é mostrada uma vez.
+
+Até esse teste, os números desta secção são de documentação e de preço — não medidos
+nesta máquina.

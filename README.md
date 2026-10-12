@@ -25,20 +25,27 @@ e entrega-te `email + password` prontos a copiar.
 
 ## Fornecedor de email
 
-Fornecedor com **API oficial de gestão de mailboxes**. A escolha e a comparação estão em
-`docs/pesquisa-api-email.md`.
+**AgentMail, plano grátis** — 3 inboxes, sem cartão de crédito. Detalhes, preços e
+limites em `docs/pesquisa-api-email.md`; instruções de integração na skill
+`provider-agentmail`.
 
-**Purelymail** — plano Simple de **$10/ano**, sem limite de mailboxes nem de domínios.
-Não é preciso comprar domínio: os domínios partilhados (como `purelymail.com`) têm uma
-taxa anual por username, de **$0,02 a $0,20** conforme o comprimento (13+ caracteres =
-$0,02). A API é um `POST` com uma API key num header, 19 endpoints documentados
-oficialmente.
+O que isso significa na prática:
 
-Detalhes e fontes em `docs/pesquisa-api-email.md`.
+- A inbox **não expira**. Podes apagá-la e criar outra a qualquer momento.
+- **Não há password.** A password do IMAP/SMTP é uma API key, e o AccMaker mostra essa
+  key. Se a perderes, a conta fica inutilizável — por isso o AccMaker guarda-a no
+  Credential Manager do Windows.
+- O endereço é `nome@agentmail.to`. No plano grátis não há domínio próprio.
+- As mensagens **enviadas** levam o rodapé "Sent via AgentMail".
+- Limite: **3 inboxes**, 100 emails por dia.
 
-> ⚠️ Esta ferramenta serve para criar contas no teu próprio domínio ou nos domínios
-> partilhados do fornecedor. Não contorna verificações de serviços públicos (Gmail,
-> Outlook, etc.) nem usa emails descartáveis.
+**Purelymail** fica disponível como opção paga ($10/ano, mailboxes ilimitadas, com
+password escolhida por ti) atrás da mesma interface `provider`. É o caminho se um dia
+o limite de 3 deixar de chegar.
+
+> ⚠️ Esta ferramenta cria inboxes num fornecedor de API. Não contorna verificações de
+> serviços públicos (Gmail, Outlook, etc.), não usa emails descartáveis e não cria
+> contas múltiplas para contornar limites de plano.
 
 ## Desenvolvimento com opencode
 Este repo traz `AGENTS.md` e skills em `.opencode/skills/`. Abre o opencode na raiz e pede, por exemplo:

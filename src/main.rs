@@ -4,12 +4,16 @@
 //! uma interface `provider`.
 
 mod password;
+mod provider;
 mod rng;
+mod slots;
 
 pub use password::{
     caracteres_disponiveis, classes_presentes, forca_estimada, gerar, gerar_limitado,
     verificar, Erro, Opcoes, TAMANHO_MAXIMO_PRUDENTE,
 };
+pub use provider::{Capacidade, Credenciais, Erro as ErroProvider, Fornecedor, Inbox};
+pub use slots::{apagar, criar, slots, trocar, username_aleatorio, Slots};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

@@ -3,13 +3,15 @@
 > Atualizado pela skill `progresso` no fim de cada tarefa. Mais recente primeiro no registo.
 
 ## Estado atual
-- Fase: 2 — Gerador de passwords pronto (CLI)
+- Fase: 3 — Interface `provider` definida, com fornecedor simulado e testes
 - Linguagem: **Rust 1.99.0** (instalado via rustup nesta máquina)
 - Perfis de build: `opt-level="z"`, `lto`, `codegen-units=1`, `panic="abort"`, `strip`
-- Fornecedor de API: **Purelymail — API confirmada em fonte primária** (swagger oficial).
+- Fornecedor de API: **AgentMail, plano grátis** (3 inboxes). Documentação oficial
+  confirmada. **Purelymail** fica como opção paga atrás da mesma interface.
   **Migadu riscado** — os termos proíbem "automation of any kind".
-- Tamanho atual do .exe: **131 584 B — 0,13 MB** (`accmaker.exe`, gerador de passwords)
+- Tamanho atual do .exe: **131 584 B — 0,13 MB**
 - Alvo de tamanho: < 5 MB (ideal < 2 MB)
+- Testes: **27 a passar**
 
 ## API do Purelymail — confirmada (2026-10-12)
 
@@ -88,22 +90,27 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 - [x] Escolha da linguagem + medição de tamanho (Rust; GUI em Win32 nativo)
 - [x] Gerador de passwords em CLI (com testes)
 - [x] **API do Purelymail confirmada** em swagger oficial
-- [ ] **Aguardar resposta do suporte** (limites de password, domínio partilhado)
-- [ ] **Medir WinHTTP vs ureq+rustls** com um pedido HTTPS real
-- [ ] Interface `provider` com `check_username` / `create_mailbox`
-- [ ] Cliente Purelymail (o domínio entra como parâmetro)
-- [ ] Interface gráfica (Win32 nativo) e ajuste da skill `estilizacao`
-- [ ] Guardar config/API key fora do .exe
+- [x] **Mudar para AgentMail grátis**; docs, README e AGENTS actualizados
+- [x] **Skill `provider-agentmail`** instalada e corrigida com factos verificados
+- [x] **Interface `provider`** com fornecedor simulado e testes de slots
+- [x] Medição de tamanho com HTTPS (WinHTTP vs ureq+rustls)
+- [ ] **Cliente AgentMail real** (listar, criar, apagar, key restrita) com `--dry-run`
+- [ ] CLI com `listar`, `criar`, `apagar`, `trocar`
+- [ ] **Teste real** com conta gratuita: 3 inboxes, apagar, criar; registar respostas
+- [ ] Guardar a key restrita no Credential Manager do Windows
+- [ ] Interface gráfica (Win32 nativo) com os 3 slots
 - [ ] Build final standalone e medição de tamanho
 - [ ] Release no GitHub
 
 ## Registo
 | Data | Tarefa | Resultado | Commit |
 |---|---|---|---|
-| 2026-10-12 | Medicao HTTPS: WinHTTP vs ureq+rustls | parcial | — |
-| 2026-10-12 | Corrigido enviesamento de modulo no gerador; 16 testes | feito | — |
+| 2026-10-12 | Interface provider + slots com mock; 27 testes | feito | — |
+| 2026-10-12 | Mudanca para AgentMail: docs, README, AGENTS, skill | feito | — |
+| 2026-10-12 | Medicao HTTPS: WinHTTP vs ureq+rustls | parcial | ac8a0b3 |
+| 2026-10-12 | Corrigido enviesamento de modulo no gerador; 16 testes | feito | ac8a0b3 |
 | 2026-10-12 | Gerador de passwords em CLI, 13 testes a passar | feito | 265064f |
-| 2026-10-12 | Swagger oficial do Purelymail confirmado; dominio partilhado | feito | — |
+| 2026-10-12 | Swagger oficial do Purelymail confirmado; dominio partilhado | feito | ac8a0b3 |
 | 2026-10-12 | Medicao de tamanho: CLI / Win32 / egui | feito | b52d368 |
 | 2026-10-12 | Regra de escrita PT-PT no AGENTS.md | feito | 7103456 |
 | 2026-10-12 | Correção da pesquisa: swagger inexistente + termos verificados | feito | cae0749 |
@@ -111,15 +118,19 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 | 2026-10-12 | Estrutura inicial: AGENTS.md, README, skills | feito | 5ba717a |
 
 ## Problemas / decisões em aberto
-- **Pendente do suporte**: limites de password do `createUser` e se aceita domínio
-  partilhado. Pergunta em `docs/pesquisa-api-email.md`, secção 8. Até responder, o
-  gerador usa um teto prudente de 64 (`TAMANHO_MAXIMO_PRUDENTE`).
-- **Por medir**: tamanho com TLS. WinHTTP (via `windows-sys`) deixa a parte de TLS a
-  cargo do Windows; `ureq` + `rustls` traz o stack inteiro e pode acrescentar MB.
-  Medir antes de escolher, porque afeta o tamanho final.
-- **Decidido**: GUI em Win32 nativo (106 KB contra 2,85 MB do egui). A skill
-  `estilizacao` tem de ser ajustada à linguagem dos controlos nativos, ou assume-se
-  uma aparência mais simples. A decidir antes da fase de interface.
+- **Sem password no AgentMail**: a password do IMAP é uma API key. Se a key se perder,
+  a conta fica inutilizável. A skill manda guardá-la no Credential Manager; ainda não
+  implementado.
+- **A key só é mostrada uma vez?** A documentação não diz. A resposta muda a
+  arquitectura do armazenamento. Fica para o teste real.
+- **A key restrita consegue apagar a própria inbox?** Se sim, um vazamento permite
+  destruir a conta. Fica para o teste real.
+- **WinHTTP**: 0,11 MB mas falhou com erro 12005 nesta máquina, mesmo contra
+  `example.org`. O `ureq` (1,17 MB) fez o pedido com estado 200. Pendente decidir.
+- **Não criar contas múltiplas** no AgentMail para contornar o limite de 3. Está na
+  skill e no `AGENTS.md`.
+- **"Permanente" com sentido próprio**: a inbox do AgentMail não expira (confirmado
+  na documentação), mas não é um email pessoal normal. A app tem de o dizer com clareza.
 - **Decidido**: Migadu fora — Acceptable Use proíbe "automation of any kind".
-- **Decidido**: `provider` com `check_username` / `create_mailbox`, domínio como
-  parâmetro, para trocar de fornecedor sem tocar na UI nem no gerador.
+- **Decidido**: GUI em Win32 nativo (106 KB contra 2,85 MB do egui); a skill
+  `estilizacao` foi ajustada ao que o Win32 dá de graça.
