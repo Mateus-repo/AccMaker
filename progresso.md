@@ -3,15 +3,15 @@
 > Atualizado pela skill `progresso` no fim de cada tarefa. Mais recente primeiro no registo.
 
 ## Estado atual
-- Fase: 4 — Cliente AgentMail e CLI prontos (ainda sem pedidos reais)
+- Fase: 5 — API validada com conta real. Falta o teste do Thunderbird e a janela.
 - Linguagem: **Rust 1.99.0** (instalado via rustup nesta máquina)
 - Perfis de build: `opt-level="z"`, `lto`, `codegen-units=1`, `panic="abort"`, `strip`
-- Fornecedor de API: **AgentMail, plano grátis** (3 inboxes). Documentação oficial
-  confirmada. **Purelymail** fica como opção paga atrás da mesma interface.
+- Fornecedor de API: **AgentMail, plano grátis** (3 inboxes). **Validado com conta
+  real.** **Purelymail** fica como opção paga atrás da mesma interface.
   **Migadu riscado** — os termos proíbem "automation of any kind".
-- Tamanho atual do .exe: **1 277 440 B — 1,22 MB** (com `ureq` + `rustls`)
+- Tamanho atual do .exe: **1 290 240 B — 1,23 MB**
 - Alvo de tamanho: < 5 MB (ideal < 2 MB) — **cumprido**
-- Testes: **35 a passar**
+- Testes: **40 a passar**
 - HTTP: `ureq` + `rustls` (o WinHTTP falhou com erro 12005 nesta máquina)
 
 ## API do Purelymail — confirmada (2026-10-12)
@@ -98,7 +98,8 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 - [x] **Cliente AgentMail** (listar, criar, apagar, key restrita) com `--dry-run`
 - [x] **CLI** com `listar`, `criar`, `apagar`, `trocar`, `password`
 - [x] **Conta órfã tratada**: se a gravação da chave falhar, mostra-a uma vez e avisa
-- [ ] **Teste real** com conta gratuita: 3 inboxes, apagar, criar; registar respostas
+- [x] **Teste real** com conta gratuita — 7 de 8 perguntas respondidas
+- [ ] **Teste do Thunderbird** (pergunta 4: a key funciona em IMAP?)
 - [ ] Interface gráfica (Win32 nativo) com os 3 slots
 - [ ] Build final standalone e medição de tamanho
 - [ ] Release no GitHub
@@ -131,10 +132,24 @@ Feito com a app compilada, contra a API a sério.
 | 2 | Username apagado pode ser reutilizado? | **Sim** — o `1-4717` foi recriado sem problema |
 | 2b | Username já em uso? | **403 `already_exists`** — "Inbox already exists" |
 | 3 | Erro da 4.ª inbox | nunca chega à API; o AccMaker recusa pela contagem |
-| 4 | Key restrita funciona em IMAP? | por testar (Thunderbird) |
-| 5 | A key só é mostrada uma vez? | por testar |
-| 6 | A key restrita apaga a própria inbox? | por testar |
-| 7 | Dá para criar 2.ª key para a mesma inbox? | por testar (consola web) |
+| 4 | Key restrita funciona em IMAP? | **por testar** (Thunderbird) |
+| 5 | A key só é mostrada uma vez? | irrelevante — ver pergunta 7 |
+| 6 | A key restrita apaga a própria inbox? | **Não — 403 `missing_permission`** |
+| 7 | Dá para criar 2.ª key para a mesma inbox? | **Sim** |
+
+### Decisões que estas respostas fecham
+
+**A conta nunca fica órfã.** Se a key se perder, cria-se outra para a mesma inbox
+(pergunta 7). O tratamento da órfã no Credential Manager passa de perda a chatice.
+Mantém-se na mesma, porque continua a ser o comportamento certo.
+
+**A key pode ser mostrada em claro na janela.** Quem tenha a key restrita não
+consegue apagar a inbox (403 `missing_permission`). Não há risco de destruir a
+conta por ter a key, e o utilizador precisa de a ver para a guardar.
+
+**O `apagar` é um passo composto** (apagar as keys, depois a inbox) e a janela tem
+de o mostrar como uma acção única, com confirmação. Do ponto de vista do utilizador
+é um botão; por baixo são três pedidos.
 
 ### Descobertas que só o teste real deu
 

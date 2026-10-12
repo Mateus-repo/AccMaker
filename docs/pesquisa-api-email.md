@@ -430,9 +430,31 @@ inboxes.
 
 ### A verificar com um teste real
 
-Ver a secção "A verificar com um teste real" da skill `provider-agentmail`. Resumo:
-se apagar liberta a vaga logo, se o username se pode reutilizar, que erro dá a 4.ª
-inbox, se a key restrita funciona em IMAP no plano grátis, e se só é mostrada uma vez.
+**Respondidas com uma conta AgentMail Free a 2026-10-12.**
 
-Até esse teste, os números desta secção são de documentação e de preço — não medidos
-nesta máquina.
+| # | Pergunta | Resposta |
+|---|---|---|
+| 1 | Apagar uma inbox liberta logo a vaga? | **Sim** — mas exige apagar as API keys da inbox primeiro, senão devolve **409 Conflict** |
+| 2 | O username de uma inbox apagada pode ser reutilizado? | **Sim** — o `1-4717` foi apagado e recriado sem problema |
+| 3 | Qual é o erro da 4.ª inbox? | **Nunca chega à API.** O AccMaker conta as vagas e recusa antes de pedir |
+| 4 | A key restrita funciona em IMAP? | **Por testar** (Thunderbird) |
+| 5 | A key só é mostrada uma vez? | Irrelevante: a pergunta 7 prova que se pode sempre criar outra |
+| 6 | A key restrita apaga a própria inbox? | **Não.** Devolve **403 `missing_permission`** |
+| 7 | Dá para criar outra key para a mesma inbox? | **Sim.** `POST /v0/inboxes/{id}/api-keys` funciona numa inbox existente |
+
+### O que estas respostas mudam
+
+**A conta nunca fica órfã (pergunta 7).** Se a key se perder ou não ficar guardada,
+basta criar outra para a mesma inbox. O tratamento da conta órfã no Credential
+Manager passa a ser uma chatice, não uma perda. O *apagar* continua a ser um passo
+composto (pergunta 1), e a janela deve mostrá-lo como uma acção só, com confirmação,
+porque do ponto de vista do utilizador é um botão.
+
+**A key pode ser mostrada em claro (pergunta 6).** Quem tenha a key restrita não
+consegue apagar a inbox: a API devolve `403 missing_permission`. Não há risco de
+alguém destruir a conta por ter a key. Mostrá-la no ecrã é aceitável e é melhor
+para o utilizador.
+
+**O estado HTTP engana (perguntas 1, 2b e 6).** A resposta 403 quer dizer "username
+já existe" ou "sem permissão", conforme o `code`. O mapeamento decide pelo `code`,
+nunca pelo estado HTTP.
