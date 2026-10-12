@@ -249,7 +249,8 @@ resposta oficial; o gerador e a interface não dependem dele.
 
 ## 8. Pergunta em aberto ao suporte do Purelymail
 
-Enviada por email (suporte@purelymail.com), a aguardar resposta:
+**Estado: redigida, por enviar.** Enviar por <https://purelymail.com/support> e guardar
+a resposta nesta secção.
 
 > 1. What are the minimum and maximum password length accepted by `createUser`, and are
 >    there any restrictions on special characters?
