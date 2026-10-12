@@ -78,6 +78,19 @@ impl AgentMail {
     }
 
     fn erro_de_estado(codigo: u16, corpo: &str) -> Erro {
+        // O `code` manda, qualquer que seja o estado HTTP. A API usa o 403
+        // para "Inbox already exists", o que nao e um erro de permissao.
+        let c = Self::campo(corpo, "code").unwrap_or_default();
+        if c.contains("already_exists") || c.contains("duplicate") || c.contains("in_use") {
+            return Erro::NomeJaExiste;
+        }
+        if c.contains("inbox_limit")
+            || c.contains("too_many_inboxes")
+            || c.contains("limit_reached")
+            || c.contains("max_inboxes")
+        {
+            return Erro::LimiteAtingido { maximo: 3 };
+        }
         match codigo {
             401 => Erro::CredenciaisInvalidas,
             403 => Erro::Api {
@@ -87,26 +100,6 @@ impl AgentMail {
             },
             404 => Erro::NaoEncontrado,
             409 => Erro::RespostaInesperada { estado: Some(codigo) },
-            422 => {
-                // A API traz um campo `code` estavel no corpo. E por ai que
-                // se sabe se e limite de inboxes ou username ja em uso.
-                let c = Self::campo(corpo, "code").unwrap_or_default();
-                if c.contains("inbox_limit")
-                    || c.contains("too_many_inboxes")
-                    || c.contains("limit_reached")
-                    || c.contains("max_inboxes")
-                {
-                    Erro::LimiteAtingido { maximo: 3 }
-                } else if c.contains("already_exists")
-                    || c.contains("duplicate")
-                    || c.contains("in_use")
-                    || c.contains("taken")
-                {
-                    Erro::NomeJaExiste
-                } else {
-                    Erro::RespostaInesperada { estado: Some(codigo) }
-                }
-            }
             429 => {
                 let espera = extrair_numeros(corpo, "wait").unwrap_or(5);
                 Erro::ExcessoDePedidos { esperar: espera }
@@ -449,10 +442,13 @@ mod testes {
             AgentMail::erro_de_estado(503, ""),
             Erro::RespostaInesperada { estado: Some(503) }
         );
+        // O caso real do teste: a API responde 403 com `already_exists`. O estado
+        // HTTP engana; e o `code` que diz o que e.
         assert_eq!(
-            format!("{}", Erro::RespostaInesperada { estado: Some(503) }),
-            "O fornecedor devolveu uma resposta inesperada (estado 503)."
+            AgentMail::erro_de_estado(403, r#"{"code":"already_exists","message":"Inbox already exists"}"#),
+            Erro::NomeJaExiste
         );
+        assert_eq!(Erro::NomeJaExiste.to_string(), "Esse username ja esta em uso. Escolhe outro.");
     }
 
     #[test]

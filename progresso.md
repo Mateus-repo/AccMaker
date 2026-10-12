@@ -121,13 +121,46 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 | 2026-10-12 | Estrutura inicial: AGENTS.md, README, skills | feito | 5ba717a |
 
 ## Problemas / decisões em aberto
-- **Por testar com a conta real** (precisas de abrir a conta AgentMail):
-  1. Apagar uma inbox liberta logo a vaga?
-  2. O username de uma inbox apagada pode ser reutilizado?
-  3. Qual é o erro exacto da 4.ª inbox? (o código HTTP e o `code` do corpo)
-  4. A key restrita funciona em IMAP no plano grátis?
-  5. A key só é mostrada uma vez? Como se recupera?
-  6. A key restrita consegue apagar a própria inbox?
+## Teste real — 2026-10-12 (conta AgentMail Free)
+
+Feito com a app compilada, contra a API a sério.
+
+| # | Pergunta | Resposta |
+|---|---|---|
+| 1 | Apagar liberta a vaga logo? | **Sim** — mas exige apagar as keys da inbox primeiro |
+| 2 | Username apagado pode ser reutilizado? | **Sim** — o `1-4717` foi recriado sem problema |
+| 2b | Username já em uso? | **403 `already_exists`** — "Inbox already exists" |
+| 3 | Erro da 4.ª inbox | nunca chega à API; o AccMaker recusa pela contagem |
+| 4 | Key restrita funciona em IMAP? | por testar (Thunderbird) |
+| 5 | A key só é mostrada uma vez? | por testar |
+| 6 | A key restrita apaga a própria inbox? | por testar |
+| 7 | Dá para criar 2.ª key para a mesma inbox? | por testar (consola web) |
+
+### Descobertas que só o teste real deu
+
+**O `DELETE` devolvia 409 Conflict.** A AgentMail recusa apagar uma inbox que ainda
+tenha API keys. Corrigido em `ff54b01`: o `apagar` lista as keys
+(`GET /v0/inboxes/{id}/api-keys`), apaga cada uma, e só depois apaga a inbox.
+Isto estava a partir o `trocar`, que era o pedido principal.
+
+**Erro falado demais.** O cliente juntava 401 e 403 na mesma mensagem. A API usa o 403
+para "Inbox already exists", que não é problema de permissão. Corrigido em `904dfb3`:
+o erro passa a mostrar o `code` e a `message` reais da API, e o mapeamento decide pelo
+`code` e não pelo estado HTTP.
+
+**O estado HTTP engana.** O `already_exists` vem em 403; o limite de inboxes nunca
+chega a ser pedido. Por isso a guarda de capacidade no cliente é o que realmente
+protege o limite de 3.
+
+**Um erro ao criar não deixa lixo.** Depois do `create` falhar, a listagem continua com
+as mesmas contas. A inbox não fica criada a meio.
+
+### Limite dos testes com mock
+
+Os 40 testes usam um fornecedor simulado que **não sabe nada dos estados HTTP que a
+API devolve**. Nenhum deles podia apanhar o 409 nem o 403 `already_exists`. Assumir
+que o mock cobre o protocolo é errado; o que ele garante é a lógica de slots e a
+segurança das passwords.
 - **Decisão de interface dependente da 6**: se a key restrita puder apagar a inbox, a
   app não deve mostrar a key em claro por defeito; só um botão "copiar".
 - **Conta órfã — regra implementada**, à espera do teste real para confirmar:
