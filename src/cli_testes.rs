@@ -151,6 +151,55 @@ fn quando_a_gravacao_falha_a_conta_ja_existe() {
 }
 
 #[test]
+fn orfa_com_yes_apaga_a_inbox() {
+    // Sem ninguem a ver o ecra, mostrar a key nao serve de nada: a inbox
+    // fica orfa e inutilizavel. Apaga-se.
+    let f = FalsoComChave::novo(3);
+    let cred = criar(&f, Some("orfa"), "c1").unwrap();
+    let id = f.listar().unwrap()[0].id.clone();
+
+    let antes = f.listar().unwrap().len();
+    f.apagar(&id).unwrap();
+    assert_eq!(f.listar().unwrap().len(), antes - 1);
+    let _ = cred;
+}
+
+#[test]
+fn orfa_com_yes_verifica_a_regra_na_lógica() {
+    // A regra esta escrita no codigo: `a.confirmar` leva a apagar. Este
+    // teste fixa a condicao, para ninguem a trocar de seguida.
+    let v = ["criar", "--yes"]
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>();
+    let a = analisar(&v).unwrap();
+    assert!(a.confirmar, "com --yes nao ha humano a ver o ecra");
+
+    let v = ["criar"]
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>();
+    let a = analisar(&v).unwrap();
+    assert!(!a.confirmar, "sem --yes pergunta-se");
+}
+
+#[test]
+fn orfa_apaga_a_inbox_certa() {
+    // A regra apaga a inbox que acabou de criar, nunca outra.
+    let f = FalsoComChave::novo(3);
+    criar(&f, Some("antiga"), "c1").unwrap();
+    criar(&f, Some("orfa"), "c2").unwrap();
+    let antes: Vec<String> = f.listar().unwrap().iter().map(|i| i.id.clone()).collect();
+
+    // Apagar a segunda (a orfa) tem de deixar a primeira.
+    let id_orfa = antes[1].clone();
+    f.apagar(&id_orfa).unwrap();
+    let depois = f.listar().unwrap();
+    assert_eq!(depois.len(), 1);
+    assert_eq!(depois[0].id, antes[0], "a outra inbox foi preservada");
+}
+
+#[test]
 fn analise_de_argumentos() {
     let v = |s: &[&str]| -> Vec<String> { s.iter().map(|x| x.to_string()).collect() };
 

@@ -27,6 +27,8 @@ pub struct AgentMail {
     /// o resultado sem rede.
     simuladas: std::cell::RefCell<Vec<Inbox>>,
     contador: std::cell::Cell<u32>,
+    /// Id da ultima inbox criada, para apagar a inbox se a chave nao ficar guardada.
+    ultimo_id: std::cell::RefCell<Option<String>>,
 }
 
 impl AgentMail {
@@ -38,6 +40,7 @@ impl AgentMail {
             dry_run: false,
             simuladas: std::cell::RefCell::new(Vec::new()),
             contador: std::cell::Cell::new(0),
+            ultimo_id: std::cell::RefCell::new(None),
         }
     }
 
@@ -48,7 +51,13 @@ impl AgentMail {
             dry_run: true,
             simuladas: std::cell::RefCell::new(Vec::new()),
             contador: std::cell::Cell::new(0),
+            ultimo_id: std::cell::RefCell::new(None),
         }
+    }
+
+    /// Id da ultima inbox criada com sucesso, se houver.
+    pub fn ultimo_id(&self) -> Option<String> {
+        self.ultimo_id.borrow().clone()
     }
 
     pub fn e_dry_run(&self) -> bool {
@@ -245,6 +254,7 @@ impl Fornecedor for AgentMail {
         let caminho = format!("/v0/inboxes/{}/api-keys", id);
         let resposta_key = self.enviar("POST", &caminho, Some(&pedido_key))?;
         let chave = Self::campo(&resposta_key, "api_key").ok_or(Erro::RespostaInesperada)?;
+        *self.ultimo_id.borrow_mut() = Some(id);
 
         Ok(Credenciais { email, password: chave })
     }

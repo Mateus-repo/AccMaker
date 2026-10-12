@@ -106,7 +106,8 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 ## Registo
 | Data | Tarefa | Resultado | Commit |
 |---|---|---|---|
-| 2026-10-12 | Cliente AgentMail + CLI; 35 testes | feito | — |
+| 2026-10-12 | Regra da conta orfa + registo do pedido unico; 38 testes | feito | — |
+| 2026-10-12 | Cliente AgentMail + CLI; 35 testes | feito | 72b6de1 |
 | 2026-10-12 | Interface provider + slots com mock; 27 testes | feito | 257e4a4 |
 | 2026-10-12 | Mudanca para AgentMail: docs, README, AGENTS, skill | feito | 257e4a4 |
 | 2026-10-12 | Medicao HTTPS: WinHTTP vs ureq+rustls | parcial | ac8a0b3 |
@@ -129,13 +130,33 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
   6. A key restrita consegue apagar a própria inbox?
 - **Decisão de interface dependente da 6**: se a key restrita puder apagar a inbox, a
   app não deve mostrar a key em claro por defeito; só um botão "copiar".
-- **Conta órfã tratada**: se o Credential Manager recusar guardar a chave depois de a
-  inbox ser criada, o AccMaker mostra a chave uma vez e avisa. Não diz que correu bem.
-  Há teste (`conta_orfa_quando_a_gravacao_falha`). Por decidir se deve também apagar a
-  inbox em vez de a deixar órfã.
-- **HTTP: `ureq` + `rustls` escolhido.** O WinHTTP daria 0,11 MB mas falhou com erro
-  12005 nesta máquina, mesmo contra `example.org`. O `ureq` faz o pedido com estado
-  200. Custa 1,06 MB a mais, e mesmo assim o total fica em 1,22 MB.
+- **Conta órfã — regra implementada**, à espera do teste real para confirmar:
+  - sem `--yes` (com humano): mostra a chave uma vez e pergunta "ja guardaste a
+    chave?". Se sim, a inbox fica — recebe email. Se não, apaga.
+  - com `--yes` (script, ninguém lê o ecrã): **apaga a inbox**, porque mostrar uma
+    chave que ninguém vai ler só deixa uma conta inutilizável a ocupar uma vaga.
+  - testes: `conta_orfa_quando_a_gravacao_falha`, `orfa_com_yes_apaga_a_inbox`,
+    `orfa_apaga_a_inbox_certa`.
+- **Pergunta 8 por testar**: a key principal consegue criar outra key restrita para
+  uma inbox já existente? Se sim, a conta nunca fica sem chave e o problema da órfã
+  desaparece por completo.
+- **Pedidos reais feitos até agora**: **nenhum ao AgentMail**. Houve um único pedido
+  de rede, na medição do TLS do dia 2026-10-12:
+  - `POST https://purelymail.com/api/v0/listDomains`
+  - cabecalho `Purelymail-Api-Token: <API_TOKEN>` (placeholder literal, sem valor real)
+  - corpo `{"includeShared":true}`
+  - devolveu **HTTP 200** com o corpo
+    `{"type":"error","code":"invalidToken","message":"Token not valid."}`
+
+  Isto **nao** provou que a API do Purelymail aceita pedidos: o Purelymail responde
+  200 com um corpo de erro, porque assim funciona a sua API. O que provou foi apenas
+  que o `ureq` + `rustls` faz HTTPS e sabe ler a resposta. Nada foi criado, nada foi
+  apagado, nenhuma conta foi tocada.
+
+  **Consequencia para o cliente**: na API do Purelymail o estado HTTP não chega para
+  saber se houve erro — e preciso ler o `type` do corpo. O cliente do AgentMail, ao
+  contrario, usa estados HTTP normais (401/404/422/429), por isso a verificação por
+  estado é suficiente lá.
 - **Não criar contas múltiplas** no AgentMail para contornar o limite de 3. Está na
   skill e no `AGENTS.md`.
 - **"Permanente" com sentido próprio**: a inbox não expira (confirmado), mas não é um

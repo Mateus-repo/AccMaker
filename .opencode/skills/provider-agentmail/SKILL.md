@@ -73,9 +73,30 @@ utilizador **no momento** em que aparece. Se a app o voltar a mostrar mais tarde
 ter guardado, e porque o tirou de um armazenamento local — e esse armazenamento passa
 a ser um segredo que protege.
 
-Decisao de produto proposta: guardar a key restrita no **Credential Manager do Windows**
-(ou cifrada com DPAPI), por inbox, e mostrar sempre a partir dai. Sem isso, um erro do
-utilizador deixa a conta inutilizavel para sempre. **A confirmar com teste real.**
+Decisao de produto Implementada: guardar a key restrita no **Credential Manager do
+Windows**, por inbox, e mostrar sempre a partir dai.
+
+### Se a gravacao da chave falhar
+
+O `CredWriteW` pode falhar (disco cheio, perfil de Windows bloqueado, antivírus). A
+inbox ja foi criada nessa altura, e fica **orfa**: existe, recebe email, mas ninguem
+consegue entrar porque a key nao ficou em lado nenhum.
+
+Regra implementada no AccMaker, que depende de haver alguem a ver o ecra:
+
+- **Sem `--yes`** (modo normal, com humano): mostrar a key uma unica vez e perguntar
+  *"ja guardaste a chave?"*. Se disser que sim, a inbox fica — ate porque ela recebe
+  email, e isso tem valor. Se disser que nao, apagar a inbox.
+- **Com `--yes`** (script, ninguem ve o ecra): **apagar a inbox**. Mostrar uma key
+  que ninguem vai ler so serve para deixar uma conta inutilizavel ocupando uma das 3
+  vagas.
+
+Por omissao, apagar e a opcao destrutiva, por isso so acontece sem `--yes` e com a
+resposta do utilizador.
+
+**Isto pode mudar depois do teste real**: se a key principal conseguir criar outra key
+restrita para uma inbox existente, a conta nunca fica perdida e o problema desaparece.
+Ver pergunta 7.
 
 Por isso, neste fornecedor:
 - o gerador de passwords e o slider de tamanho **nao se aplicam**
@@ -132,7 +153,11 @@ Teste: criar 3 inboxes, apagar uma, criar outra, e registar o que aconteceu.
 6. **Ja respondido**: existe expiracao de mensagens? **Nao.** Politica opcional por
    organizacao, desligada por omissao. Ver `docs/pesquisa-api-email.md`.
 7. A key restrita pode apagar a propria inbox? Se sim, um vazamento da key permite
-   destruir a conta — avaliar se vale a pena mostrá-la.
+   destruir a conta — avaliar se vale a pena mostrar a key.
+8. **A key principal consegue criar outra key restrita para uma inbox ja existente?**
+   Se sim, uma conta nunca fica sem chave (basta recriar) e o problema da conta orfa
+   desaparece por completo. E o mais importante dos oito, porque decide se vale a pena
+   investir na recuperacao.
 
 Registar as respostas em `docs/pesquisa-api-email.md` com a data do teste.
 

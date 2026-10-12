@@ -211,6 +211,55 @@ fn cmd_listar(f: &AgentMail) -> Result<(), String> {
     Ok(())
 }
 
+/// Resolva a conta orfa: a inbox foi criada mas a chave nao ficou guardada.
+///
+/// A regra depende de haver alguem a ver o ecra:
+/// - com `--yes` nao ha ninguem, e a key mostrada vai ser perdida. Apaga-se a
+///   inbox, para nao deixar uma conta inutilizavel.
+/// - sem `--yes` pergunta-se. Quem decide e o utilizador: a inbox nova e util
+///   (recebe email) mesmo sem a key guardada.
+fn resolver_orfa(f: &AgentMail, a: &Args, cred: &Credenciais, inbox_id: &str) -> Result<(), String> {
+    println!();
+    println!("ATENCAO: a conta foi criada mas a chave NAO ficou guardada.");
+    println!("No AgentMail a chave e a password. Sem ela, nao se entra na conta.");
+    println!();
+    println!("  Email:  {}", cred.email);
+    println!("  Chave:  {}", cred.password);
+    println!();
+
+    if a.confirmar {
+        // Ninguem vai ler o ecra. Apagar e o que evita deixar uma conta morta.
+        println!("Sem confirmacao interactiva: a apagar a inbox orfa.");
+        f.apagar(inbox_id).map_err(|e| e.to_string())?;
+        println!("Inbox apagada. A vaga ficou livre.");
+        return Ok(());
+    }
+
+    if perguntar("Ja guardaste a chave?") {
+        println!("A inbox fica. Guarda a chave: sem ela a conta nao serve.");
+    } else {
+        println!("Vou apagar a inbox.");
+        f.apagar(inbox_id).map_err(|e| e.to_string())?;
+        println!("Inbox apagada. A vaga ficou livre.");
+    }
+    Ok(())
+}
+
+/// Pergunta ao utilizador. Sem `--yes`, le do ecra.
+fn perguntar(texto: &str) -> bool {
+    print!("{} (s/N) ", texto);
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
+    let mut resposta = String::new();
+    if std::io::stdin().read_line(&mut resposta).is_err() {
+        return false;
+    }
+    matches!(
+        resposta.trim().to_lowercase().as_str(),
+        "s" | "sim" | "y" | "yes"
+    )
+}
+
 fn cmd_criar(f: &AgentMail, a: &Args, cofre: &dyn Cofre) -> Result<(), String> {
     // A listagem ja happened antes para confirmar; em dry-run nao vale a pena
     // repetir o pedido so para contar as vagas.
@@ -258,15 +307,11 @@ fn cmd_criar(f: &AgentMail, a: &Args, cofre: &dyn Cofre) -> Result<(), String> {
             println!("Chave guardada no Credential Manager ({}).", nome_cofre);
         }
         Err(e) => {
-            println!();
-            println!("ATENCAO: a conta foi criada mas a chave NAO ficou guardada.");
-            println!("Motivo: {}", e);
-            println!("Copia a chave agora. Sem ela, a conta nao serve para nada,");
-            println!("porque no AgentMail a chave e a password.");
-            println!();
-            println!("  Email:  {}", cred.email);
-            println!("  Chave:  {}", cred.password);
-            println!();
+            println!("Motivo da falha: {}", e);
+            let id = f
+                .ultimo_id()
+                .unwrap_or_else(|| cred.email.clone());
+            resolver_orfa(f, a, &cred, &id)?;
         }
     }
     Ok(())
@@ -336,4 +381,7 @@ fn ajuda() {
     println!("API KEY");
     println!("  De AGENTMAIL_API_KEY ou do Credential Manager.");
     println!("  Nunca em argumento de linha de comandos.");
+    println!();
+    println!("  No PowerShell, prefere nao deixar a key no historico:");
+    println!("    $env:AGENTMAIL_API_KEY = Read-Host 'AgenteMail API key'");
 }
