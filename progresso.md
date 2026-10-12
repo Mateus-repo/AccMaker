@@ -30,6 +30,38 @@ $0,02–0,20 por username e por ano. Confirmado em `purelymail.com/docs/users`.
 Pendente de resposta do suporte: limites de password, e se o `createUser` aceita
 domínio partilhado.
 
+## Medição do HTTPS: WinHTTP vs ureq+rustls (2026-10-12)
+
+Ambas compiladas em release com o mesmo perfil, com um pedido HTTPS real a
+`purelymail.com/api/v0/listDomains`.
+
+| Opção | Tamanho | TLS | Pedido real |
+|---|---|---|---|
+| **WinHTTP** (`windows-sys`) | **111 104 B — 0,11 MB** | a cargo do Windows (schannel) | **falhou** (erro 12005) |
+| **ureq + rustls** | **1 226 240 B — 1,17 MB** | dentro do binário | **estado 200** |
+
+O `ureq` traz o stack TLS inteiro: **1,06 MB a mais** que o WinHTTP, o que é
+praticamente todo o orçamento de 2 MB. Mesmo assim fica dentro do alvo.
+
+O WinHTTP **não chegou a fazer o pedido**: devolveu erro de sistema 12005 contra
+`purelymail.com` e também contra `example.org`, portanto não é do site nem da rede
+(o `ureq` fez o mesmo pedido com estado 200). Não consegui isolar a causa — testei
+sem deteção de proxy e sem a flag de ignorar CA, e o erro persiste. Pode ser uma
+política de segurança desta máquina. **Fica por investigar antes de escolher.**
+
+Os números de tamanho são fiáveis (binários compilados e medidos); a fiabilidade
+funcional do WinHTTP **não** está demonstrada.
+
+## Gerador de passwords
+
+`accmaker.exe` com 16 testes a passar, incluindo 10 000 passwords com as quatro
+classes ativas, a confirmar que todas aparecem em cada uma.
+
+Bug corrigido nesta tarefa: a zona de rejeição em `indice_sem_enviesamento` estava
+calculada sobre o intervalo de 16 bits, mas o RNG devolve 1 byte. Com um byte a zona
+correta é `(256 / n) * n`; a anterior aceitava valores que introduzem enviesamento
+de módulo. Corrigido e coberto por um teste de distribuição.
+
 ## Medições reais do tamanho (2026-10-12)
 
 Compiladas em release com o perfil da skill `build-exe-leve`, Rust 1.99.0.
@@ -68,7 +100,9 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 ## Registo
 | Data | Tarefa | Resultado | Commit |
 |---|---|---|---|
-| 2026-10-12 | Gerador de passwords em CLI, 13 testes a passar | feito | — |
+| 2026-10-12 | Medicao HTTPS: WinHTTP vs ureq+rustls | parcial | — |
+| 2026-10-12 | Corrigido enviesamento de modulo no gerador; 16 testes | feito | — |
+| 2026-10-12 | Gerador de passwords em CLI, 13 testes a passar | feito | 265064f |
 | 2026-10-12 | Swagger oficial do Purelymail confirmado; dominio partilhado | feito | — |
 | 2026-10-12 | Medicao de tamanho: CLI / Win32 / egui | feito | b52d368 |
 | 2026-10-12 | Regra de escrita PT-PT no AGENTS.md | feito | 7103456 |

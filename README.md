@@ -28,9 +28,13 @@ e entrega-te `email + password` prontos a copiar.
 Fornecedor com **API oficial de gestão de mailboxes**. A escolha e a comparação estão em
 `docs/pesquisa-api-email.md`.
 
-**Purelymail** — $10/ano pela conta, sem limite de mailboxes. Não é preciso comprar
-domínio: os domínios partilhados (como `purelymail.com`) custam $0,02 a $0,20 por
-username e por ano. A API é um `POST` com uma API key num header, 19 endpoints.
+**Purelymail** — plano Simple de **$10/ano**, sem limite de mailboxes nem de domínios.
+Não é preciso comprar domínio: os domínios partilhados (como `purelymail.com`) têm uma
+taxa anual por username, de **$0,02 a $0,20** conforme o comprimento (13+ caracteres =
+$0,02). A API é um `POST` com uma API key num header, 19 endpoints documentados
+oficialmente.
+
+Detalhes e fontes em `docs/pesquisa-api-email.md`.
 
 > ⚠️ Esta ferramenta serve para criar contas no teu próprio domínio ou nos domínios
 > partilhados do fornecedor. Não contorna verificações de serviços públicos (Gmail,

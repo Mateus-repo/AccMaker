@@ -9,7 +9,32 @@ description: Guia de estilo visual da interface do AccMaker (tema escuro, tokens
 - Janela **pequena e de uma só vista** (~420×560), sem separadores nem menus escondidos.
 - Fluxo em 3 passos visíveis: **Domínio/Username → Password → Criar**.
 - Resultado grande e legível: email + password com botão **Copiar** ao lado de cada um.
-- Estética moderna, sóbria. Zero ficheiros de imagem externos: ícones desenhados em código ou caracteres.
+- Estética sóbria. Zero ficheiros de imagem externos: ícones desenhados em código ou
+  caracteres.
+
+## Realidade da interface: Win32 nativo
+
+A GUI é **Win32 nativo** (`windows-sys`), não uma biblioteca de widgets. Decisão de
+2026-10-12, baseada em medição: o `egui` dá 2,85 MB só com a janela e um botão,
+contra 0,11 MB do Win32. Como o alvo é < 2 MB, o `egui` não serve.
+
+Consequência: o que se descreve a seguir é o **alvo visual**, e o que não for nativo
+fica aproximado. Não prometer o que não sai.
+
+| Elemento | Nativamente | Notas |
+|---|---|---|
+| Botões, campos de texto, listas, caixas de verificação | **Sim** | controlos padrão do Windows |
+| Tema escuro | **Sim** | `DwmSetWindowAttribute`, Windows 10 1809+ |
+| Cantos arredondados | **Sim** | `DwmSetWindowAttribute` com `DWMWCP_ROUND`, Janela 11 |
+| Slider do tamanho da password | **Sim** | `TRACKBAR`, com o valor numérico ao lado |
+| Botão "Copiar" | **Sim** | escrever na area de transferencia |
+| Barra de força colorida | **Parcial** | `PROGRESSBAR` colorido, sem gradiente |
+| Animações suaves | **Não** | só as de abrir e fechar que o Windows dá |
+| Ícones vetoriais | **Não** | usar caracteres Unicode, sem ficheiros |
+
+Se um efeito não couber na coluna "Sim" ou "Parcial", **aproximar ou deixar de fora**.
+Não desenhar controlos à mão só por causa de um canto: custa tempo, aumenta o risco
+de bugs, e o tamanho do .exe é o objetivo principal.
 
 ## Tokens (tema escuro por omissão, com tema claro opcional)
 | Token | Escuro | Claro |
@@ -26,7 +51,7 @@ description: Guia de estilo visual da interface do AccMaker (tema escuro, tokens
 ## Tipografia e espaçamento
 - Fonte do sistema (Segoe UI no Windows); **monoespaçada** para email e password.
 - Escala: 12 / 14 / 16 / 22 px. Espaçamento em múltiplos de 4 (8, 12, 16, 24).
-- Cantos arredondados 8 px; botões com altura mínima 36 px.
+- Altura mínima de botão: 36 px. Cantos arredondados ao nível da janela, não dos controlos.
 
 ## Componentes
 - **Slider de tamanho da password** com valor numérico visível e limites (mín–máx) vindos do fornecedor.

@@ -90,6 +90,79 @@ mod testes {
     }
 
     #[test]
+    fn dez_mil_passwords_tem_todas_as_classes() {
+        // Com tamanho minimo (4, uma por classe ativa) e as quatro classes
+        // ligadas, cada password tem de trazer as quatro. Dez mil amostras
+        // apanham qualquer classe que às vezes falte.
+        let opcoes = opcoes_padrao();
+        let esperadas: HashSet<&str> =
+            ["minuscula", "maiuscula", "numero", "simbolo"].into_iter().collect();
+
+        for i in 0..10_000 {
+            let p = password::gerar(4, opcoes).unwrap();
+            let presentes = classes_presentes(&p);
+            assert_eq!(
+                presentes, esperadas,
+                "password {} de 10000 sem todas as classes: {:?}",
+                i, p
+            );
+        }
+    }
+
+    #[test]
+    fn tamanho_acima_do_minimo_tambem_tem_todas_as_classes() {
+        // Nao basta o caso minimo: com 8 caracteres, uma classe pode calhar
+        // a zeros se a garantia nao for posta em cada password.
+        let opcoes = opcoes_padrao();
+        let esperadas: HashSet<&str> =
+            ["minuscula", "maiuscula", "numero", "simbolo"].into_iter().collect();
+        for i in 0..2_000 {
+            let p = password::gerar(8, opcoes).unwrap();
+            assert_eq!(classes_presentes(&p), esperadas, "faltou classe em {}", p);
+            let _ = i;
+        }
+    }
+
+    #[test]
+    fn a_distribuicao_nao_esta_enviesada() {
+        // Com um byte, escolher mal a zona de rejeicao faz os primeiros
+        // indices sairem mais vezes. Repete-se muito para tornar o desvio
+        // visivel contra o valor esperado.
+        let opcoes = Opcoes {
+            minusculas: false,
+            maiusculas: false,
+            numeros: true,
+            simbolos: false,
+            excluir_ambiguos: true,
+        };
+        // 8 digitos sem ambiguos; 256 % 8 == 0, logo e o caso limpo.
+        let disponiveis: Vec<char> = password::caracteres_disponiveis(&opcoes).chars().collect();
+        let n = disponiveis.len();
+        assert_eq!(n, 8, "esperava 8 digitos sem ambiguos, obtive {}", n);
+
+        let mut contagem = vec![0usize; n];
+        const N: usize = 60_000;
+        for _ in 0..N {
+            let p = password::gerar(1, opcoes).unwrap();
+            let c = p.chars().next().unwrap();
+            let idx = disponiveis.iter().position(|d| *d == c).unwrap();
+            contagem[idx] += 1;
+        }
+        let esperado = N / n;
+        for (i, c) in contagem.iter().enumerate() {
+            // +/- 25% e folgado de proposito: apanha enviesamento real sem
+            // ficar sensivel a variacao normal.
+            assert!(
+                *c > esperado * 3 / 4 && *c < esperado * 5 / 4,
+                "indice {} saiu {} vezes, esperado ~{}",
+                i,
+                c,
+                esperado
+            );
+        }
+    }
+
+    #[test]
     fn comprimento_exato() {
         for n in [4usize, 8, 12, 16, 32, 64] {
             let p = password::gerar(n, opcoes_padrao()).unwrap();

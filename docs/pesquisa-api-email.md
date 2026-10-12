@@ -125,17 +125,32 @@ partilhados** (por exemplo `purelymail.com`). Fonte: <https://purelymail.com/doc
 > small annual usage charge per username (typically $0 to $1.20/year depending on
 > length) to prevent name-squatting.**"
 
-Preços por username em domínio partilhado (<https://purelymail.com/advancedpricing>):
+### Preço por username em domínio partilhado
 
-| Tamanho do username | Custo |
-|---|---|
-| 1 a 6 letras | $0,20 por utilizador por ano |
-| 7 a 12 letras | $0,05 por utilizador por ano |
-| 13 ou mais | $0,02 por utilizador por ano |
+**URL exata:** <https://purelymail.com/advancedpricing>, secção "Exact fees", sob
+"Usernames on shared domains". Texto literal da página:
 
-Para o AccMaker, um username aleatório longo (13+) custa **$0,02/ano** — custo
-praticamente irrelevante, e é precisamente esse comprimento que o gerador deve produzir
-para evitar name-squatting.
+> **Usernames on shared domains:**
+> - **1 to 6 letters:** $0.20 per user per year
+> - **7 to 12 letters:** $0.05 per user per year
+> - **13+ letters:** $0.02 per user per year
+
+A página de documentação (<https://purelymail.com/docs/users>) dá outro número:
+
+> "**Shared Domains:** If you use our shared domains (like purelymail.com), there is a
+> small annual usage charge per username (typically **$0 to $1.20/year** depending on
+> length) to prevent name-squatting."
+
+**Os dois estão certos e não se contradizem.** A documentação dá a *gama*; a página de
+preços avançados dá a *tabela exata*, de $0,02 a $0,20. A documentação deve estar a
+incluir componentes que não constam dessa tabela, ou a usar um valor máximo
+conservador para estimar o custo.
+
+Para o AccMaker vale a **tabela**: $0,02 a $0,20 por username e por ano. Com um
+username de 13+ caracteres, **$0,02/ano**.
+
+Nota: estes preços são de **preço avançado** (pay as you go, com $4/ano de conta). No
+plano **Simple** de $10/ano não há limites rígidos, e é esse o plano a usar.
 
 A API tem `listDomains` com `includeShared` (predefinição `false`): passar `true` lista
 também os domínios partilhados. A especificação inclui `isShared` ("Whether this domain

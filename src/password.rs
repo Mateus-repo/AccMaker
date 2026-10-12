@@ -113,11 +113,19 @@ fn classes_ativas(opcoes: &Opcoes) -> Vec<Vec<u8>> {
 }
 
 /// Escolhe um indice uniformemente em `0..n`, sem enviesamento de modulo.
-/// Rejeita os valores que caiam na parte final do intervalo do RNG.
+///
+/// Um byte tem 256 valores. Se 256 nao for multiplo de `n`, os primeiros
+/// `256 % n` indices sairiam mais vezes do que os outros. Para evitar isso,
+/// rejeita-se a cauda da tabela — de `n * (256 / n)` ate 255 — e so se aceita
+/// o que sobrar, que ja divide certo por `n`.
 fn indice_sem_enviesamento(rng: &mut dyn FnMut() -> u8, n: usize) -> usize {
     assert!(n > 0);
-    // Zona de rejeicao: o maior multiplo de n que cabe no intervalo do RNG.
-    let limite = (u16::MAX as usize + 1) / n * n;
+    debug_assert!(
+        n <= 256,
+        "o gerador de um byte nao cobre um alfabeto de {} caracteres",
+        n
+    );
+    let limite = (256 / n) * n; // maior multiplo de n dentro de 0..256
     loop {
         let v = rng() as usize;
         if v < limite {
