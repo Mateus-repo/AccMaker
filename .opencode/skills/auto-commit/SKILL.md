@@ -24,19 +24,33 @@ No fim de cada tarefa concluída, **depois** de atualizar `progresso.md`.
    ```
    Cobre cirílico, grego, CJK, kana e hangul. Vale também para o texto das mensagens,
    que não passa por ficheiro: reler antes de escrever.
-4. Garantir que `.gitignore` cobre `*.exe`, `target/`, `dist/`, `.env`, `*.key`.
-5. `git add -A` (ou apenas os ficheiros da tarefa).
-6. Mensagem no formato `tipo(âmbito): descrição curta no imperativo` (≤ 72 caracteres), por exemplo:
+4. Garantir que `.gitignore` cobre `*.exe`, `target/`, `dist/`, `.env`, `*.key`,
+   `*.zip` e pastas de materiais de trabalho.
+5. **Adicionar só os ficheiros da tarefa, nunca `git add .` nem `git add -A`.**
+   Nomes por omissão pegam em tudo o que esteja na pasta, incluindo zips e
+   materiais que o utilizador lá deixou. Num repo público isso é um acidente
+   que fica no histórico para sempre.
+6. **Conferir o que ficou em teste antes de commitar**, e parar se aparecer algo
+   fora do esperado:
+   ```powershell
+   git diff --cached --name-only
+   ```
+   Se a lista trouxer ficheiros que não pertencem a esta tarefa, `git reset` e
+   adicionar um a um. Não seguir para o commit sem fazer isto.
+7. Mensagem no formato `tipo(âmbito): descrição curta no imperativo` (≤ 72 caracteres), por exemplo:
    - `feat(passwords): gerar password com RNG criptográfico`
    - `docs(pesquisa): comparar APIs de email`
    - `chore(build): ativar perfil release leve`
    Tipos: `feat`, `fix`, `refactor`, `docs`, `chore`, `style`, `test`.
-7. `git commit -m "<mensagem>"`.
-8. Se existir remote (`git remote -v` não vazio): `git push` na branch atual.
+8. `git commit -m "<mensagem>"`.
+9. Se existir remote (`git remote -v` não vazio): `git push` na branch atual.
    Se falhar por autenticação ou conflito, **não forçar** — informar o utilizador.
-9. Reportar o hash do commit (`git rev-parse --short HEAD`).
+10. Reportar o hash do commit (`git rev-parse --short HEAD`).
 
 ## Proibido
 - `git push --force`, `git reset --hard`, reescrever histórico.
 - Commitar binários (`.exe`), ficheiros de configuração local ou qualquer segredo.
+- **`git add .` e `git add -A`.** Ja aconteceu: um `git add .` levou um zip de
+  materiais para um repo publico, e a remocao posterior nao o tira do historico.
+  Adicionar sempre por nome, depois de `git diff --cached --name-only`.
 - Misturar tarefas diferentes no mesmo commit.
