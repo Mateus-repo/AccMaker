@@ -15,3 +15,7 @@ secrets.*
 Thumbs.db
 .vscode/
 .idea/
+
+# materiais de trabalho que nao pertencem ao repo
+newResources/
+*.zip
