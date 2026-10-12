@@ -44,6 +44,19 @@ permanente** através da API de um fornecedor. No fim mostra email + password co
 5. Interface (`estilizacao`).
 6. Release: .exe final < alvo de tamanho definido em `progresso.md`.
 
+## Escrita (regra estrita)
+- Escrever **apenas em português europeu**, sem andar a trocá-lo por inglês no
+  texto corrido.
+- **Nunca escrever caracteres fora do alfabeto latino** nos ficheiros do projeto:
+  nada de caracteres CJK, cirílicos, grego, emoji ou símbolos exóticos. Apenas
+  latin supplement + acentuação portuguesa (á, â, ã, ç, é, ê, í, ó, ô, õ, ú).
+  Exceção única: código, identificadores e texto de API de terceiros, que se
+  escrevem como a fonte original os define.
+- Ao concluir um ficheiro, **relê-lo antes do commit** a confirmar que não há
+  caracteres estranhos nem texto truncado. Se aparecerem, corrige-os antes de
+  commitar — nunca vão para o git.
+- Se uma frase soar estranhamente truncada ou a meio, relê-la e reescrevê-la.
+
 ## Convenções
 - Commits: `tipo(âmbito): descrição` em PT-PT — `feat`, `fix`, `refactor`, `docs`, `chore`, `style`, `test`.
 - Um commit por tarefa concluída. Nunca `git push --force`.
