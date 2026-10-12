@@ -37,7 +37,13 @@ O que isso significa na prática:
   Credential Manager do Windows.
 - O endereço é `nome@agentmail.to`. No plano grátis não há domínio próprio.
 - As mensagens **enviadas** levam o rodapé "Sent via AgentMail".
-- Limite: **3 inboxes**, 100 emails por dia.
+- Limite: **3 inboxes**, 100 emails por dia, 3 000 por mês, 3 GB.
+
+> **Os limites do plano grátis, em resumo.** Três inboxes, e é o que dá. A partir da
+> 4.ª, a API recusa — o AccMaker diz-te "apaga uma conta primeiro" e não tenta
+> contornar. Os 100 emails por dia e os 3 000 por mês **não affectam a criação de
+> inboxes**, só o envio. Se algum dia precisares de mais, há o plano Developer a
+> $20/mês com 10 inboxes, ou o Purelymail a $10/ano com mailboxes ilimitadas.
 
 **Purelymail** fica disponível como opção paga ($10/ano, mailboxes ilimitadas, com
 password escolhida por ti) atrás da mesma interface `provider`. É o caminho se um dia

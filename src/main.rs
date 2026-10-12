@@ -1,342 +1,339 @@
-//! AccMaker — gerador de passwords.
+//! AccMaker — CLI.
 //!
-//! Fase 1: so o gerador, sem rede. O cliente da API entra mais tarde, atras de
-//! uma interface `provider`.
+//! Comandos: `listar`, `criar`, `apagar`, `trocar`, `password`.
+//! Todos aceitam `--dry-run` para mostrar o pedido sem o enviar.
 
+mod agentmail;
+mod cofre;
 mod password;
 mod provider;
 mod rng;
 mod slots;
 
+#[cfg(test)]
+mod cli_testes;
+
+pub use agentmail::AgentMail;
+pub use cofre::{mascarar, Cofre, CofreFalso, CofreWindows};
 pub use password::{
     caracteres_disponiveis, classes_presentes, forca_estimada, gerar, gerar_limitado,
-    verificar, Erro, Opcoes, TAMANHO_MAXIMO_PRUDENTE,
+    verificar, Erro as ErroPassword, Opcoes, TAMANHO_MAXIMO_PRUDENTE,
 };
-pub use provider::{Capacidade, Credenciais, Erro as ErroProvider, Fornecedor, Inbox};
+pub use provider::{Capacidade, Credenciais, Erro, Fornecedor, Inbox};
 pub use slots::{apagar, criar, slots, trocar, username_aleatorio, Slots};
 
+/// Valor sentinela para quando o utilizador diz "ao acaso".
+const QUALQUER: &str = "?";
+
+/// As opcoes da linha de comandos.
+struct Args {
+    comando: String,
+    username: Option<String>,
+    inbox_id: Option<String>,
+    dry_run: bool,
+    confirmar: bool,
+    tamanho: usize,
+    quantidade: usize,
+    opcoes: Opcoes,
+    caracteres: bool,
+}
+
+fn analisar(argumentos: &[String]) -> Result<Args, String> {
+    let mut comando = String::new();
+    let mut inbox_id: Option<String> = None;
+    let mut posicionais: Vec<String> = Vec::new();
+
+    for a in argumentos {
+        if a.starts_with("--") {
+            continue;
+        }
+        if comando.is_empty() {
+            comando = a.clone();
+        } else if inbox_id.is_none() {
+            inbox_id = Some(a.clone());
+        } else {
+            posicionais.push(a.clone());
+        }
+    }
+    let _ = posicionais;
+
+    let tem = |nome: &str| argumentos.iter().any(|a| a == nome);
+    let valor = |nome: &str| {
+        argumentos
+            .iter()
+            .find_map(|a| a.strip_prefix(&format!("{}=", nome)))
+            .map(|v| v.to_string())
+    };
+
+    let tamanho = valor("--tamanho")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(16);
+    if tamanho == 0 {
+        return Err("o tamanho tem de ser pelo menos 1".into());
+    }
+
+    Ok(Args {
+        comando,
+        username: match valor("--username").as_deref() {
+            None | Some(QUALQUER) => None,
+            Some(u) if u.is_empty() => None,
+            Some(u) => Some(u.to_string()),
+        },
+        inbox_id,
+        dry_run: tem("--dry-run"),
+        confirmar: tem("--yes") || tem("--sim"),
+        tamanho,
+        quantidade: valor("--quantidade")
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(1),
+        opcoes: Opcoes {
+            minusculas: !tem("--sem-minusculas"),
+            maiusculas: !tem("--sem-maiusculas"),
+            numeros: !tem("--sem-numeros"),
+            simbolos: !tem("--sem-simbolos"),
+            excluir_ambiguos: !tem("--ambiguos"),
+        },
+        caracteres: tem("--caracteres"),
+    })
+}
+
+/// `client_id` unico por tentativa, para repetir o pedido sem duplicar.
+fn novo_client_id() -> String {
+    let mut bytes = [0u8; 16];
+    let mut rng = rng::OsRng;
+    rng.fill(&mut bytes);
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Pede confirmacao ao utilizador antes de uma accao destrutiva ou que gasta
+/// uma das 3 vagas. Com `--yes` nao pergunta.
+fn confirmar(a: &Args, pergunta: &str) -> bool {
+    if a.confirmar || a.dry_run {
+        return true;
+    }
+    print!("{} (s/N) ", pergunta);
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
+    let mut resposta = String::new();
+    if std::io::stdin().read_line(&mut resposta).is_err() {
+        return false;
+    }
+    matches!(resposta.trim().to_lowercase().as_str(), "s" | "sim" | "y" | "yes")
+}
+
+fn mostrar_credenciais(c: &Credenciais, password_escolhida: bool) {
+    println!();
+    println!("  Email:  {}", c.email);
+    println!("  {}:  {}", c.rotulo_password(password_escolhida), c.password);
+    println!();
+}
+
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let argumentos: Vec<String> = std::env::args().skip(1).collect();
+    let a = match analisar(&argumentos) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("erro: {}", e);
+            std::process::exit(2);
+        }
+    };
 
-    let mut opcoes = Opcoes::default();
-    if args.iter().any(|a| a == "--sem-minusculas") {
-        opcoes.minusculas = false;
-    }
-    if args.iter().any(|a| a == "--sem-maiusculas") {
-        opcoes.maiusculas = false;
-    }
-    if args.iter().any(|a| a == "--sem-numeros") {
-        opcoes.numeros = false;
-    }
-    if args.iter().any(|a| a == "--sem-simbolos") {
-        opcoes.simbolos = false;
-    }
-    if args.iter().any(|a| a == "--ambiguos") {
-        opcoes.excluir_ambiguos = false;
-    }
-
-    if args.iter().any(|a| a == "--caracteres") {
-        println!("{}", password::caracteres_disponiveis(&opcoes));
+    // Gerador de passwords: nao precisa de rede nem de chave.
+    if a.comando == "password" {
+        if a.caracteres {
+            println!("{}", caracteres_disponiveis(&a.opcoes));
+            return;
+        }
+        for _ in 0..a.quantidade {
+            match gerar_limitado(a.tamanho, a.opcoes, None) {
+                Ok(p) => println!("{}", p),
+                Err(e) => {
+                    eprintln!("erro: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
         return;
     }
 
-    let tamanho = args
-        .iter()
-        .find_map(|a| a.strip_prefix("--tamanho="))
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(16);
-
-    // Enquanto o limite oficial do fornecedor nao se sabe, o teto e prudente.
-    let teto = match args.iter().find_map(|a| a.strip_prefix("--teto=")) {
-        Some(v) => v.parse::<usize>().ok().filter(|n| *n > 0),
-        None => Some(TAMANHO_MAXIMO_PRUDENTE),
-    };
-
-    if tamanho == 0 {
-        eprintln!("erro: o tamanho tem de ser pelo menos 1");
-        std::process::exit(2);
+    if a.comando.is_empty() || a.comando == "ajuda" || a.comando == "--ajuda" {
+        ajuda();
+        return;
     }
 
-    let quantidade = args
-        .iter()
-        .find_map(|a| a.strip_prefix("--quantidade="))
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(1);
+    // Daqui para baixo e preciso da API key.
+    let cofre = CofreWindows;
+    let chave = match cofre::ler_api_key(&cofre) {
+        Ok(k) => k,
+        Err(e) => {
+            eprintln!("erro: {}", e);
+            std::process::exit(2);
+        }
+    };
 
-    for _ in 0..quantidade {
-        match password::gerar_limitado(tamanho, opcoes, teto) {
-            Ok(p) => {
-                // Reconfirma as garantias antes de mostrar ao utilizador.
-                if let Err(motivo) = password::verificar(&p, &opcoes) {
-                    eprintln!("erro interno: a password gerada nao cumpre as regras: {}", motivo);
-                    std::process::exit(3);
-                }
-                println!("{}", p);
-            }
-            Err(e) => {
-                eprintln!("erro: {}", e);
-                std::process::exit(1);
-            }
+    let f: AgentMail = if a.dry_run {
+        AgentMail::dry_run(chave)
+    } else {
+        AgentMail::novo(chave)
+    };
+
+    let resultado = match a.comando.as_str() {
+        "listar" => cmd_listar(&f),
+        "criar" => cmd_criar(&f, &a, &cofre),
+        "apagar" => cmd_apagar(&f, &a),
+        "trocar" => cmd_trocar(&f, &a),
+        outro => Err(format!(
+            "comando desconhecido: {}. Vê `accmaker ajuda`.",
+            outro
+        )),
+    };
+
+    match resultado {
+        Ok(()) => {}
+        Err(e) => {
+            eprintln!("erro: {}", e);
+            std::process::exit(1);
         }
     }
 }
 
-#[cfg(test)]
-mod testes {
-    use super::*;
-    use password::classes_presentes;
-    use std::collections::HashSet;
-
-    const VEZES: usize = 400;
-
-    fn opcoes_padrao() -> Opcoes {
-        Opcoes::default()
-    }
-
-    #[test]
-    fn dez_mil_passwords_tem_todas_as_classes() {
-        // Com tamanho minimo (4, uma por classe ativa) e as quatro classes
-        // ligadas, cada password tem de trazer as quatro. Dez mil amostras
-        // apanham qualquer classe que às vezes falte.
-        let opcoes = opcoes_padrao();
-        let esperadas: HashSet<&str> =
-            ["minuscula", "maiuscula", "numero", "simbolo"].into_iter().collect();
-
-        for i in 0..10_000 {
-            let p = password::gerar(4, opcoes).unwrap();
-            let presentes = classes_presentes(&p);
-            assert_eq!(
-                presentes, esperadas,
-                "password {} de 10000 sem todas as classes: {:?}",
-                i, p
-            );
+fn cmd_listar(f: &AgentMail) -> Result<(), String> {
+    let s = slots(f).map_err(|e| e.to_string())?;
+    if s.contas.is_empty() {
+        println!("Nenhuma conta criada.");
+    } else {
+        for (i, inbox) in s.contas.iter().enumerate() {
+            println!("{}. {}  ({}  {})", i + 1, inbox.email, inbox.id, inbox.criada_em);
         }
     }
+    println!();
+    println!("{}/{} contas ocupadas.", s.capacidade.usadas, s.capacidade.maximo);
+    Ok(())
+}
 
-    #[test]
-    fn tamanho_acima_do_minimo_tambem_tem_todas_as_classes() {
-        // Nao basta o caso minimo: com 8 caracteres, uma classe pode calhar
-        // a zeros se a garantia nao for posta em cada password.
-        let opcoes = opcoes_padrao();
-        let esperadas: HashSet<&str> =
-            ["minuscula", "maiuscula", "numero", "simbolo"].into_iter().collect();
-        for i in 0..2_000 {
-            let p = password::gerar(8, opcoes).unwrap();
-            assert_eq!(classes_presentes(&p), esperadas, "faltou classe em {}", p);
-            let _ = i;
+fn cmd_criar(f: &AgentMail, a: &Args, cofre: &dyn Cofre) -> Result<(), String> {
+    // A listagem ja happened antes para confirmar; em dry-run nao vale a pena
+    // repetir o pedido so para contar as vagas.
+    let c = if a.dry_run {
+        slots::Slots {
+            contas: Vec::new(),
+            capacidade: Capacidade { usadas: 0, maximo: 3 },
+        }
+    } else {
+        slots(f).map_err(|e| e.to_string())?
+    };
+    if c.capacidade.cheia() {
+        return Err(format!(
+            "Chegaste ao limite de {} contas. Apaga uma com `accmaker apagar <id>`.",
+            c.capacidade.maximo
+        ));
+    }
+    let client_id = novo_client_id();
+    let username = a
+        .username
+        .clone()
+        .unwrap_or_else(|| username_aleatorio(12));
+    println!("Username: {}", username);
+
+    if !confirmar(a, "Criar conta nova?") {
+        return Ok(());
+    }
+
+    let cred = criar(f, Some(&username), &client_id).map_err(|e| e.to_string())?;
+
+    // Gravar a key da conta no cofre. Se falhar, a conta fica orfa: mostrar a
+    // key uma vez e avisar, em vez de dizer que correu bem.
+    let nome_cofre = format!("inbox-{}", &cred.email);
+    // Em dry-run nada e gravado: seria estragar o Credential Manager com uma
+    // conta que nao existe.
+    if a.dry_run {
+        mostrar_credenciais(&cred, false);
+        println!("(dry-run: nada foi gravado no Credential Manager)");
+        return Ok(());
+    }
+
+    match cofre.gravar(&nome_cofre, &cred.password) {
+        Ok(()) => {
+            mostrar_credenciais(&cred, false);
+            println!("Chave guardada no Credential Manager ({}).", nome_cofre);
+        }
+        Err(e) => {
+            println!();
+            println!("ATENCAO: a conta foi criada mas a chave NAO ficou guardada.");
+            println!("Motivo: {}", e);
+            println!("Copia a chave agora. Sem ela, a conta nao serve para nada,");
+            println!("porque no AgentMail a chave e a password.");
+            println!();
+            println!("  Email:  {}", cred.email);
+            println!("  Chave:  {}", cred.password);
+            println!();
         }
     }
+    Ok(())
+}
 
-    #[test]
-    fn a_distribuicao_nao_esta_enviesada() {
-        // Com um byte, escolher mal a zona de rejeicao faz os primeiros
-        // indices sairem mais vezes. Repete-se muito para tornar o desvio
-        // visivel contra o valor esperado.
-        let opcoes = Opcoes {
-            minusculas: false,
-            maiusculas: false,
-            numeros: true,
-            simbolos: false,
-            excluir_ambiguos: true,
-        };
-        // 8 digitos sem ambiguos; 256 % 8 == 0, logo e o caso limpo.
-        let disponiveis: Vec<char> = password::caracteres_disponiveis(&opcoes).chars().collect();
-        let n = disponiveis.len();
-        assert_eq!(n, 8, "esperava 8 digitos sem ambiguos, obtive {}", n);
-
-        let mut contagem = vec![0usize; n];
-        const N: usize = 60_000;
-        for _ in 0..N {
-            let p = password::gerar(1, opcoes).unwrap();
-            let c = p.chars().next().unwrap();
-            let idx = disponiveis.iter().position(|d| *d == c).unwrap();
-            contagem[idx] += 1;
-        }
-        let esperado = N / n;
-        for (i, c) in contagem.iter().enumerate() {
-            // +/- 25% e folgado de proposito: apanha enviesamento real sem
-            // ficar sensivel a variacao normal.
-            assert!(
-                *c > esperado * 3 / 4 && *c < esperado * 5 / 4,
-                "indice {} saiu {} vezes, esperado ~{}",
-                i,
-                c,
-                esperado
-            );
-        }
+fn cmd_apagar(f: &AgentMail, a: &Args) -> Result<(), String> {
+    let id = match &a.inbox_id {
+        Some(i) => i.clone(),
+        None => return Err("falta o id da conta. Vê `accmaker listar`.".into()),
+    };
+    if !confirmar(
+        a,
+        "Isto apaga a conta e TODAS as mensagens. Nao da para anular. Continuar?",
+    ) {
+        return Ok(());
     }
+    let s = apagar(f, &id).map_err(|e| e.to_string())?;
+    println!("Conta apagada.");
+    println!(
+        "{}/{} contas ocupadas.",
+        s.capacidade.usadas, s.capacidade.maximo
+    );
+    Ok(())
+}
 
-    #[test]
-    fn comprimento_exato() {
-        for n in [4usize, 8, 12, 16, 32, 64] {
-            let p = password::gerar(n, opcoes_padrao()).unwrap();
-            assert_eq!(p.chars().count(), n, "comprimento errado para {}", n);
-        }
+fn cmd_trocar(f: &AgentMail, a: &Args) -> Result<(), String> {
+    let id = match &a.inbox_id {
+        Some(i) => i.clone(),
+        None => return Err("falta o id da conta a trocar. Vê `accmaker listar`.".into()),
+    };
+    if !confirmar(
+        a,
+        "Trocar apaga a conta antiga e TODAS as suas mensagens, e cria uma nova. Continuar?",
+    ) {
+        return Ok(());
     }
+    let client_id = novo_client_id();
+    let username = a
+        .username
+        .clone()
+        .unwrap_or_else(|| username_aleatorio(12));
+    println!("Username novo: {}", username);
+    let cred = trocar(f, &id, Some(&username), &client_id).map_err(|e| e.to_string())?;
+    mostrar_credenciais(&cred, false);
+    println!("Conta trocada.");
+    Ok(())
+}
 
-    #[test]
-    fn nunca_fica_sem_caracter_de_alguma_classe() {
-        let opcoes = opcoes_padrao();
-        for _ in 0..VEZES {
-            let p = password::gerar(4, opcoes).unwrap();
-            let c = classes_presentes(&p);
-            assert_eq!(c.len(), 4, "faltou classe em {:?}", p);
-            assert!(c.contains("minuscula"), "sem minuscula em {:?}", p);
-            assert!(c.contains("maiuscula"), "sem maiuscula em {:?}", p);
-            assert!(c.contains("numero"), "sem numero em {:?}", p);
-            assert!(c.contains("simbolo"), "sem simbolo em {:?}", p);
-        }
-    }
-
-    #[test]
-    fn nunca_deixa_caracter_ambiguo() {
-        let opcoes = opcoes_padrao();
-        assert!(opcoes.excluir_ambiguos);
-        for _ in 0..VEZES {
-            let p = password::gerar(16, opcoes).unwrap();
-            for ch in p.chars() {
-                assert!(
-                    !"0O1lI".contains(ch),
-                    "caracter ambiguo {:?} em {}",
-                    ch,
-                    p
-                );
-            }
-            assert!(!p.contains(' '), "espaco em {}", p);
-        }
-    }
-
-    #[test]
-    fn modo_ambiguos_ligado_tem_mais_opcoes() {
-        let sem = password::caracteres_disponiveis(&Opcoes {
-            excluir_ambiguos: true,
-            ..Opcoes::default()
-        });
-        let com = password::caracteres_disponiveis(&Opcoes {
-            excluir_ambiguos: false,
-            ..Opcoes::default()
-        });
-        assert!(
-            com.len() > sem.len(),
-            "o modo ambiguo devia aumentar o alfabeto: {} vs {}",
-            sem.len(),
-            com.len()
-        );
-    }
-
-    #[test]
-    fn modo_ambiguos_ligado_aceita_ambiguos() {
-        let opcoes = Opcoes {
-            excluir_ambiguos: false,
-            ..Opcoes::default()
-        };
-        let mut apareceu_ambiguo = false;
-        for _ in 0..VEZES {
-            let p = password::gerar(24, opcoes).unwrap();
-            if p.chars().any(|c| "0O1lI".contains(c)) {
-                apareceu_ambiguo = true;
-                break;
-            }
-        }
-        assert!(
-            apareceu_ambiguo,
-            "com ambiguos ligados nunca saiu um caracter ambiguo"
-        );
-        // Nunca espacos nem aspas, que partiriam a linha ou o JSON.
-        for _ in 0..VEZES {
-            let p = password::gerar(24, opcoes).unwrap();
-            assert!(!p.contains(' '));
-            assert!(!p.contains('"'));
-        }
-    }
-
-    #[test]
-    fn classes_desligadas_respeitam_a_opcao() {
-        let opcoes = Opcoes {
-            numeros: false,
-            ..Opcoes::default()
-        };
-        for _ in 0..VEZES {
-            let p = password::gerar(8, opcoes).unwrap();
-            assert!(
-                !p.chars().any(|c| c.is_ascii_digit()),
-                "numero presente com numeros desligados: {}",
-                p
-            );
-        }
-    }
-
-    #[test]
-    fn comprimento_menino_que_o_numero_de_classes_da_erro() {
-        let opcoes = opcoes_padrao();
-        assert_eq!(
-            password::gerar(3, opcoes),
-            Err(Erro::CurtoDemais { pedido: 3, minimo: 4 })
-        );
-    }
-
-    #[test]
-    fn sem_nenhuma_classe_da_erro() {
-        let opcoes = Opcoes {
-            minusculas: false,
-            maiusculas: false,
-            numeros: false,
-            simbolos: false,
-            excluir_ambiguos: true,
-        };
-        assert_eq!(password::gerar(16, opcoes), Err(Erro::SemClasses));
-    }
-
-    #[test]
-    fn nunca_repete_o_mesmo_valor_consecutivo() {
-        let opcoes = opcoes_padrao();
-        let mut anterior = password::gerar(16, opcoes).unwrap();
-        for _ in 0..50 {
-            let atual = password::gerar(16, opcoes).unwrap();
-            assert_ne!(anterior, atual, "o gerador devolveu duas iguais seguidas");
-            anterior = atual;
-        }
-    }
-
-    #[test]
-    fn valores_sao_variados() {
-        // Duas passwords de 16 chars num alfabeto de ~80 deviam ser distintas;
-        // 200 amostras iguais apontariam para um gerador avariado.
-        let opcoes = opcoes_padrao();
-        let vistas: HashSet<String> = (0..200).map(|_| password::gerar(16, opcoes).unwrap()).collect();
-        assert_eq!(vistas.len(), 200, "demasiadas passwords iguais");
-    }
-
-    #[test]
-    fn tetos_sao_respeitados() {
-        let opcoes = opcoes_padrao();
-        // Fornecedor com limite abaixo do pedido.
-        let p = password::gerar_limitado(64, opcoes, Some(12)).unwrap();
-        assert_eq!(p.chars().count(), 12);
-        // Sem limite do fornecedor aplica o teto prudente.
-        let p = password::gerar_limitado(500, opcoes, None).unwrap();
-        assert_eq!(p.chars().count(), TAMANHO_MAXIMO_PRUDENTE);
-        // Teto prudente aplica-se mesmo com limite maior do fornecedor.
-        let p = password::gerar_limitado(500, opcoes, Some(1000)).unwrap();
-        assert_eq!(p.chars().count(), TAMANHO_MAXIMO_PRUDENTE);
-    }
-
-    #[test]
-    fn verifica_deteta_password_invalida() {
-        let opcoes = opcoes_padrao();
-        assert!(password::verificar("abc", &opcoes).is_err());
-        assert!(password::verificar("Ab3!", &opcoes).is_ok());
-        assert!(password::verificar("Abcdefgh3!", &opcoes).is_ok());
-        // Com ambiguos, um deles estraga a password.
-        assert!(password::verificar("Ab1!", &opcoes).is_err(), "1 e ambiguo");
-    }
-
-    #[test]
-    fn forca_cresce_com_o_tamanho() {
-        let opcoes = opcoes_padrao();
-        let curta = password::forca_estimada(8, &opcoes);
-        let longa = password::forca_estimada(32, &opcoes);
-        assert!(longa > curta);
-        assert!(curta > 0.0);
-    }
+fn ajuda() {
+    println!("accmaker — criar e trocar contas de email");
+    println!();
+    println!("COMANDOS");
+    println!("  listar                 mostra as contas e as vagas");
+    println!("  criar                  cria uma conta nova (pede confirmacao)");
+    println!("  apagar <id>            apaga uma conta");
+    println!("  trocar <id>            apaga uma conta e cria outra");
+    println!("  password               gera passwords (sem rede)");
+    println!("  ajuda                  esta ajuda");
+    println!();
+    println!("OPCIONES");
+    println!("  --dry-run              mostra o pedido HTTP sem o enviar");
+    println!("  --yes                  nao pedir confirmacao");
+    println!("  --username=<nome>      escolhe o username; omissao = ao acaso");
+    println!("  --tamanho=<n>          tamanho da password (comando password)");
+    println!("  --quantidade=<n>       quantas passwords (comando password)");
+    println!();
+    println!("API KEY");
+    println!("  De AGENTMAIL_API_KEY ou do Credential Manager.");
+    println!("  Nunca em argumento de linha de comandos.");
 }
