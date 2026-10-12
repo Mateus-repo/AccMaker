@@ -156,7 +156,40 @@ impl AgentMail {
     }
 
     
-/// Extrai um campo de texto do JSON, sem trazer uma biblioteca de JSON
+/// Corpo JSON da lista de API keys de uma inbox.
+    fn corpo_das_keys(&self, inbox_id: &str) -> Result<String, Erro> {
+        let caminho = format!("/v0/inboxes/{}/api-keys", inbox_id);
+        self.enviar("GET", &caminho, None)
+    }
+
+    /// Extrai os `api_key_id` de `{"api_keys":[{...}, ...]}`.
+    ///
+    /// Uma inbox sem chaves devolve lista vazia, e nao erro: foi assim que a
+    /// inbox `1-4717` se apagou sem qualquer chave.
+    fn ids_de_keys(corpo: &str) -> Vec<String> {
+        let inicio = match corpo.find("\"api_keys\"") {
+            Some(i) => match corpo[i..].find('[') {
+                Some(j) => i + j,
+                None => return Vec::new(),
+            },
+            None => return Vec::new(),
+        };
+        let mut ids = Vec::new();
+        let mut resto = &corpo[inicio + 1..];
+        while let Some(abertura) = resto.find('{') {
+            let fecho = match resto[abertura..].find('}') {
+                Some(x) => abertura + x,
+                None => break,
+            };
+            if let Some(id) = AgentMail::campo(&resto[abertura..fecho], "api_key_id") {
+                ids.push(id);
+            }
+            resto = &resto[fecho + 1..];
+        }
+        ids
+    }
+
+    /// Extrai um campo de texto do JSON, sem trazer uma biblioteca de JSON
     /// para dentro do binario. A API devolve objectos simples e aninhados
     /// (`inboxes`, `threads`), por isso isto cobre o necessario.
     fn campo<'t>(corpo: &'t str, chave: &str) -> Option<String> {
@@ -271,6 +304,12 @@ impl Fornecedor for AgentMail {
     }
 
     fn apagar(&self, inbox_id: &str) -> Result<(), Erro> {
+        // A AgentMail recusa apagar uma inbox que ainda tenha API keys
+        // criadas por nos (devolve 409). Apagam-se as keys da inbox primeiro.
+        for id in Self::ids_de_keys(&self.corpo_das_keys(inbox_id)?) {
+            let caminho = format!("/v0/inboxes/{}/api-keys/{}", inbox_id, id);
+            self.enviar("DELETE", &caminho, None)?;
+        }
         let caminho = format!("/v0/inboxes/{}", inbox_id);
         self.enviar("DELETE", &caminho, None)?;
         Ok(())
@@ -338,6 +377,22 @@ mod testes {
             AgentMail::campo(r#"{"inbox_id":"x1"}"#, "email"),
             None
         );
+    }
+
+    #[test]
+    fn le_as_keys_de_uma_inbox() {
+        let corpo = r#"{"count":2,"api_keys":[{"type":"bearer","api_key_id":"k1","name":"accmaker"},{"type":"bearer","api_key_id":"k2","name":"outra"}]}"#;
+        assert_eq!(
+            AgentMail::ids_de_keys(corpo),
+            vec!["k1".to_string(), "k2".to_string()]
+        );
+    }
+
+    #[test]
+    fn inbox_sem_keys_da_lista_vazia() {
+        // Foi o que aconteceu com a inbox 1-4717: apagou-se sem chaves.
+        assert!(AgentMail::ids_de_keys(r#"{"count":0,"api_keys":[]}"#).is_empty());
+        assert!(AgentMail::ids_de_keys("{}").is_empty());
     }
 
     #[test]
