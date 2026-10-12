@@ -437,7 +437,7 @@ inboxes.
 | 1 | Apagar uma inbox liberta logo a vaga? | **Sim** — mas exige apagar as API keys da inbox primeiro, senão devolve **409 Conflict** |
 | 2 | O username de uma inbox apagada pode ser reutilizado? | **Sim** — o `1-4717` foi apagado e recriado sem problema |
 | 3 | Qual é o erro da 4.ª inbox? | **Nunca chega à API.** O AccMaker conta as vagas e recusa antes de pedir |
-| 4 | A key restrita funciona em IMAP? | **Por testar** (Thunderbird) |
+| 4 | A key restrita funciona em IMAP? | **Sim.** Ligou no Thunderbird com `imap.agentmail.to:993` e a chave como password |
 | 5 | A key só é mostrada uma vez? | Irrelevante: a pergunta 7 prova que se pode sempre criar outra |
 | 6 | A key restrita apaga a própria inbox? | **Não.** Devolve **403 `missing_permission`** |
 | 7 | Dá para criar outra key para a mesma inbox? | **Sim.** `POST /v0/inboxes/{id}/api-keys` funciona numa inbox existente |

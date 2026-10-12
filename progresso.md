@@ -3,7 +3,7 @@
 > Atualizado pela skill `progresso` no fim de cada tarefa. Mais recente primeiro no registo.
 
 ## Estado atual
-- Fase: 5 — API validada com conta real. Falta o teste do Thunderbird e a janela.
+- Fase: 6 — Todas as 8 perguntas fechadas com conta real. A fazer a janela Win32.
 - Linguagem: **Rust 1.99.0** (instalado via rustup nesta máquina)
 - Perfis de build: `opt-level="z"`, `lto`, `codegen-units=1`, `panic="abort"`, `strip`
 - Fornecedor de API: **AgentMail, plano grátis** (3 inboxes). **Validado com conta
@@ -98,8 +98,7 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 - [x] **Cliente AgentMail** (listar, criar, apagar, key restrita) com `--dry-run`
 - [x] **CLI** com `listar`, `criar`, `apagar`, `trocar`, `password`
 - [x] **Conta órfã tratada**: se a gravação da chave falhar, mostra-a uma vez e avisa
-- [x] **Teste real** com conta gratuita — 7 de 8 perguntas respondidas
-- [ ] **Teste do Thunderbird** (pergunta 4: a key funciona em IMAP?)
+- [x] **Teste real** com conta gratuita — **8 de 8 perguntas respondidas**
 - [ ] Interface gráfica (Win32 nativo) com os 3 slots
 - [ ] Build final standalone e medição de tamanho
 - [ ] Release no GitHub
@@ -132,7 +131,7 @@ Feito com a app compilada, contra a API a sério.
 | 2 | Username apagado pode ser reutilizado? | **Sim** — o `1-4717` foi recriado sem problema |
 | 2b | Username já em uso? | **403 `already_exists`** — "Inbox already exists" |
 | 3 | Erro da 4.ª inbox | nunca chega à API; o AccMaker recusa pela contagem |
-| 4 | Key restrita funciona em IMAP? | **por testar** (Thunderbird) |
+| 4 | Key restrita funciona em IMAP? | **Sim** — ligou no Thunderbird com `imap.agentmail.to:993` e a chave como password |
 | 5 | A key só é mostrada uma vez? | irrelevante — ver pergunta 7 |
 | 6 | A key restrita apaga a própria inbox? | **Não — 403 `missing_permission`** |
 | 7 | Dá para criar 2.ª key para a mesma inbox? | **Sim** |
