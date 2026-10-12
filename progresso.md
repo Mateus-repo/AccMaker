@@ -3,13 +3,32 @@
 > Atualizado pela skill `progresso` no fim de cada tarefa. Mais recente primeiro no registo.
 
 ## Estado atual
-- Fase: 1 — Linguagem escolhida: **Rust**. GUI adiada.
+- Fase: 2 — Gerador de passwords pronto (CLI)
 - Linguagem: **Rust 1.99.0** (instalado via rustup nesta máquina)
 - Perfis de build: `opt-level="z"`, `lto`, `codegen-units=1`, `panic="abort"`, `strip`
-- Fornecedor de API: **Purelymail** (pendente de confirmação oficial).
+- Fornecedor de API: **Purelymail — API confirmada em fonte primária** (swagger oficial).
   **Migadu riscado** — os termos proíbem "automation of any kind".
-- Tamanho atual do .exe: **110 KB** (CLI de medição, sem interface)
+- Tamanho atual do .exe: **131 584 B — 0,13 MB** (`accmaker.exe`, gerador de passwords)
 - Alvo de tamanho: < 5 MB (ideal < 2 MB)
+
+## API do Purelymail — confirmada (2026-10-12)
+
+Especificação oficial em <https://news.purelymail.com/api/index.html>, com o JSON em
+`swagger-spec.js` (36 KB). Título "Purelymail API" v0.0.1, 19 endpoints, todos `POST`
+em `/api/v0/`. Autenticação: header `Purelymail-Api-Token` (apiKey), sem OAuth.
+
+`CreateUserRequest`: obrigatórios `userName`, `domainName`, `password`; opcionais
+`enablePasswordReset`, `recoveryEmail`, `recoveryPhone`, `enableSearchIndexing`,
+`sendWelcomeEmail`.
+
+O campo `password` está declarado sem `minLength`, `maxLength` ou `pattern` — a
+especificação **não impõe nem documenta limites**.
+
+**Não é preciso comprar domínio.** Há domínios partilhados (`purelymail.com`) a
+$0,02–0,20 por username e por ano. Confirmado em `purelymail.com/docs/users`.
+
+Pendente de resposta do suporte: limites de password, e se o `createUser` aceita
+domínio partilhado.
 
 ## Medições reais do tamanho (2026-10-12)
 
@@ -35,11 +54,13 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 ## Checklist
 - [x] Pesquisa e escolha da API de email
 - [x] Escolha da linguagem + medição de tamanho (Rust; GUI em Win32 nativo)
-- [ ] **Aguardar resposta do suporte Purelymail** (limites de password + suporte da API)
-- [ ] Gerador de passwords em CLI (com testes) — **independente do fornecedor**
+- [x] Gerador de passwords em CLI (com testes)
+- [x] **API do Purelymail confirmada** em swagger oficial
+- [ ] **Aguardar resposta do suporte** (limites de password, domínio partilhado)
+- [ ] **Medir WinHTTP vs ureq+rustls** com um pedido HTTPS real
 - [ ] Interface `provider` com `check_username` / `create_mailbox`
-- [ ] Cliente Purelymail (só após resposta do suporte)
-- [ ] Interface estilizada
+- [ ] Cliente Purelymail (o domínio entra como parâmetro)
+- [ ] Interface gráfica (Win32 nativo) e ajuste da skill `estilizacao`
 - [ ] Guardar config/API key fora do .exe
 - [ ] Build final standalone e medição de tamanho
 - [ ] Release no GitHub
@@ -47,21 +68,24 @@ Nenhum destes números é uma previsão: sao de binarios compilados e medidos.
 ## Registo
 | Data | Tarefa | Resultado | Commit |
 |---|---|---|---|
-| 2026-10-12 | Medicao de tamanho: CLI / Win32 / egui | feito | — |
+| 2026-10-12 | Gerador de passwords em CLI, 13 testes a passar | feito | — |
+| 2026-10-12 | Swagger oficial do Purelymail confirmado; dominio partilhado | feito | — |
+| 2026-10-12 | Medicao de tamanho: CLI / Win32 / egui | feito | b52d368 |
 | 2026-10-12 | Regra de escrita PT-PT no AGENTS.md | feito | 7103456 |
 | 2026-10-12 | Correção da pesquisa: swagger inexistente + termos verificados | feito | cae0749 |
 | 2026-10-12 | Pesquisa da API de email (`docs/pesquisa-api-email.md`) | feito | 6d79550 |
 | 2026-10-12 | Estrutura inicial: AGENTS.md, README, skills | feito | 5ba717a |
 
 ## Problemas / decisões em aberto
-- **Bloqueante**: limites de password do `createUser` desconhecidos. Pergunta **redigida
-  e por enviar** ao suporte do Purelymail (secção 8 de `docs/pesquisa-api-email.md`).
-  A resposta define o máximo do slider (`provider.max_password_length`). Não bloqueia o
-  gerador nem a interface.
-- **Bloqueante**: API do Purelymail não tem documentação oficial (404 em `/docs` e no
-  swagger). Não escrever o cliente antes de confirmação oficial.
-- **Decidido**: Migadu fora — Acceptable Use proíbe "automation of any kind" e permite
-  terminação sem aviso. API bem documentada mas incompatível com o caso de uso.
-- **Decidido**: arquitetura com `provider` atrás de `check_username` / `create_mailbox`,
-  para trocar de fornecedor sem tocar na UI nem no gerador.
-- Ordem de precedência do gerador de passwords: catálogo de caracteres a definir.
+- **Pendente do suporte**: limites de password do `createUser` e se aceita domínio
+  partilhado. Pergunta em `docs/pesquisa-api-email.md`, secção 8. Até responder, o
+  gerador usa um teto prudente de 64 (`TAMANHO_MAXIMO_PRUDENTE`).
+- **Por medir**: tamanho com TLS. WinHTTP (via `windows-sys`) deixa a parte de TLS a
+  cargo do Windows; `ureq` + `rustls` traz o stack inteiro e pode acrescentar MB.
+  Medir antes de escolher, porque afeta o tamanho final.
+- **Decidido**: GUI em Win32 nativo (106 KB contra 2,85 MB do egui). A skill
+  `estilizacao` tem de ser ajustada à linguagem dos controlos nativos, ou assume-se
+  uma aparência mais simples. A decidir antes da fase de interface.
+- **Decidido**: Migadu fora — Acceptable Use proíbe "automation of any kind".
+- **Decidido**: `provider` com `check_username` / `create_mailbox`, domínio como
+  parâmetro, para trocar de fornecedor sem tocar na UI nem no gerador.

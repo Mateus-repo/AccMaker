@@ -15,7 +15,7 @@ de CAPTCHA/SMS.
 | Critério | **Purelymail** | **Migadu** | **FranklyMail** | **Mailcow** (self-hosted) | **Stalwart** (self-hosted) | **Zoho Mail** (org) | **Google Workspace** | **Microsoft 365** | **Fastmail** |
 |---|---|---|---|---|---|---|---|---|---|
 | Cria mailbox real com password do chamador | **Sim** (`createUser` com `password`) | **Sim** (`POST .../mailboxes` com `password`) | **Sim** (`POST /mailboxes` com `password`) | Sim | Sim (via JMAP `Account/set`) | Sim | Sim | Sim (com licença) | **Não** (sem API de provisioning) |
-| Domínio próprio obrigatório | Quase (há domínios partilhados `purelymail.com`) | **Sim** | **Sim** | **Sim** | **Sim** | **Sim** + conta Zoho paga | **Sim** + Workspace | **Sim** + tenant M365 | Não (domínios próprios, mas sem API admin) |
+| Domínio próprio obrigatório | **Não** — há domínios partilhados (`purelymail.com`) a $0,02–0,20 por username/ano | **Sim** | **Sim** | **Sim** | **Sim** | **Sim** + conta Zoho paga | **Sim** + Workspace | **Sim** + tenant M365 | Não (domínios próprios, mas sem API admin) |
 | Custo | **$10/ano flat** (plano Simple), sem limite de users/domínios | $19/ano (Micro) ou $9/mês (Standard, $90/ano); mailboxes ilimitadas | $9/ano, $0,40/GB/yr acima de 10 GB | Grátis (custo é o servidor) | Grátis (custo é o servidor) | ~$1,20/utilizador/mês (Mail Lite) | $7/utilizador/mês (Business Starter) | ~$6/utilizador/mês | ~$3–40/utilizador/mês |
 | Limites de password documentados | Não documentados; sem mínimo imposto pela API | Não documentados | Validação por campo; não documentada no resumo | Validação no servidor Dovecot | Política configurável (enterprise) | Política da organização | Política do domínio | Política do tenant | n/a |
 | Autenticação | **API key em header** (`Purelymail-Api-Token`), sem OAuth | HTTP Basic (email da conta + API key) | **Bearer token** de management key | Header `X-API-Key` ou `Authorization: Bearer` | Bearer / Basic contra `/jmap` | OAuth 2.0 (client ID/secret + refresh) | OAuth 2.0 (service account) | OAuth 2.0 (client credentials) | OAuth 2.0 + JMAP |
@@ -56,22 +56,43 @@ Porque:
 |---|---|---|
 | Preço ($10/ano, sem limites) | **Confirmado** | <https://purelymail.com/pricing> |
 | Termos (ver secção 6) | **Confirmado** | <https://purelymail.com/termsofservice> |
-| Existência da API `createUser` | **NÃO verificada em fonte primária** | ver abaixo |
-| Limites de password | **Desconhecidos** | nenhum |
+| API `createUser` e restantes 18 endpoints | **Confirmado** | swagger oficial |
+| Domínio partilhado (`purelymail.com`) | **Confirmado** | <https://purelymail.com/docs/users> |
+| Limites de password | **Desconhecidos** | não constam da especificação |
 
-Ressalva importante: **não existe documentação oficial da API no site do Purelymail.**
-Verificado em 2026-10-12:
-- `purelymail.com/docs` — índice oficial, **sem qualquer página de API** (só setup,
-  domínios, users, routing, filtros, FAQ).
-- `purelymail.com/api/v0/swagger.json` — **404**.
-- Sem página de API referenciada em qualquer lado do site ou da documentação.
+### Fonte primária da API
 
-Tudo o que sabemos sobre `createUser` vem de **terceiros**: a extensão oficial da
-Raycast e MCP servers da comunidade. É consistente entre si e usa um payload plausível,
-mas não é fonte primária e pode estar desactualizado ou errado.
+**Existe documentação oficial**, num endereço que não é óbvio:
 
-Não escrever o cliente da API contra esta fonte sem antes de obter confirmação
-oficial (ver secção 6).
+- Interface: <https://news.purelymail.com/api/index.html> (Swagger UI, HTTP 200)
+- Especificação: <https://news.purelymail.com/api/swagger-spec.js> (JSON, 36 KB, 19 endpoints)
+
+Título da especificação: "Purelymail API", versão `0.0.1`, servidor
+`https://purelymail.com`. Autenticação declarada em `components.securitySchemes`:
+
+```json
+"token": { "name": "Purelymail-Api-Token", "type": "apiKey", "in": "header" }
+```
+
+Isto confirma a API key num header, sem OAuth, exatamente como se pressupunha.
+
+Endpoints (todos `POST` em `/api/v0/`): `createUser`, `deleteUser`, `listUser`,
+`modifyUser`, `getUser`, `upsertPasswordReset`, `deletePasswordReset`,
+`listPasswordReset`, `createRoutingRule`, `deleteRoutingRule`, `listRoutingRules`,
+`addDomain`, `getOwnershipCode`, `listDomains`, `updateDomainSettings`,
+`deleteDomain`, `createAppPassword`, `deleteAppPassword`, `checkAccountCredit`.
+
+`CreateUserRequest` — campos obrigatórios `userName`, `domainName`, `password`.
+Opcionais: `enablePasswordReset` (predef. `true`), `recoveryEmail`,
+`recoveryEmailDescription`, `recoveryPhone`, `recoveryPhoneDescription`,
+`enableSearchIndexing` (predef. `true`), `sendWelcomeEmail` (predef. `true`).
+
+`userName` é descrito como "Local part of username, e.g. 'user' in 'user@domain.com'".
+
+**Nota:** o campo `password` está declarado como `{"type": "string"}`, sem `minLength`,
+sem `maxLength` e sem `pattern`. A especificação **não impõe limites**, o que não
+significa que o servidor não os tenha — só que não estão documentados. Continua a
+precisar de resposta oficial (secção 8).
 
 ### Alternativa — Migadu
 
@@ -93,6 +114,36 @@ allow-list de IP — o `AccMaker` passa a precisar do endereço do servidor conf
 ---
 
 ## 3. Endpoints exatos
+
+### Domínio: próprio **ou** partilhado
+
+Não é preciso comprar um domínio para usar o AccMaker. O Purelymail tem **domínios
+partilhados** (por exemplo `purelymail.com`). Fonte: <https://purelymail.com/docs/users>
+
+> "Custom Domains: There is no additional charge for users on domains you own.
+> **Shared Domains: If you use our shared domains (like purelymail.com), there is a
+> small annual usage charge per username (typically $0 to $1.20/year depending on
+> length) to prevent name-squatting.**"
+
+Preços por username em domínio partilhado (<https://purelymail.com/advancedpricing>):
+
+| Tamanho do username | Custo |
+|---|---|
+| 1 a 6 letras | $0,20 por utilizador por ano |
+| 7 a 12 letras | $0,05 por utilizador por ano |
+| 13 ou mais | $0,02 por utilizador por ano |
+
+Para o AccMaker, um username aleatório longo (13+) custa **$0,02/ano** — custo
+praticamente irrelevante, e é precisamente esse comprimento que o gerador deve produzir
+para evitar name-squatting.
+
+A API tem `listDomains` com `includeShared` (predefinição `false`): passar `true` lista
+também os domínios partilhados. A especificação inclui `isShared` ("Whether this domain
+is shared (owned by Purelymail)") em `ApiDomainInfo`.
+
+**Ainda por confirmar:** se o `createUser` aceita um domínio partilhado no `domainName`.
+A especificação diz apenas `domainName: {"type": "string"}`, sem restrições, e o portal
+aceita. Não é prova. Incluído na pergunta da secção 8.
 
 ### Purelymail (recomendado)
 
@@ -158,8 +209,8 @@ Auth: header `X-API-Key: <KEY>` (ou `Authorization: Bearer <KEY>`, conforme vers
 
 | Risco | Impacto | Mitigação no AccMaker |
 |---|---|---|
-| **API do Purelymail não documentada em fonte primária** | Endpoint ou payload podem não existir ou ter mudado | Não escrever o cliente antes da resposta do suporte (secção 8); `--dry-run` sempre; cliente isolado atrás da interface `provider` |
-| **Mínimo/máximo de password desconhecidos** | Slider fica sem valor por definir | `provider.max_password_length` fica vazio até haver resposta oficial; a app não depende dele |
+| **Mínimo/máximo de password não documentados** | Slider fica sem valor por definir | `provider.max_password_length` com limite prudente de 64 até haver resposta oficial; a app não depende dele |
+| **`createUser` com domínio partilhado não confirmado** | Se a API recusar `purelymail.com`, é preciso domínio próprio | `provider` recebe o domínio como parâmetro — trocar entre `purelymail.com` e domínio próprio é só configuração |
 | **Migadu proíbe "automation of any kind"** | Usar o Migadu seria violar os termos | **Não usar.** Ver secção 6 |
 | Domínio próprio não verificado (MX/SPF/DKIM) | Mailbox criada mas sem receber correio | Mostrar estado do domínio na app; avisar antes de criar |
 | API key comprometida | Criação de mailboxes em nome do utilizador | Chave fora do `.exe` (em `%APPDATA%\AccMaker\`), nunca em logs, nunca no git |
@@ -195,8 +246,9 @@ Ou seja: a proibição é sobre **o que se envia**, não sobre **quantas mailbox
 Não encontrei cláusula que proíba automatizar a gestão da própria conta. Os termos
 também não mencionam a API em lado nenhum.
 
-Leitura: **compatível**, para uso próprio no próprio domínio, desde que a app não envie
-spam nem faça aquecimento de reputação.
+Leitura: **compatível**, para uso próprio, desde que a app não envie spam nem faça
+aquecimento de reputação. Nota: silêncio não é autorização — a confirmação continua na
+secção 8.
 
 ### Migadu — <https://migadu.com/use> (verificado 2026-10-12)
 
@@ -227,11 +279,15 @@ documentada (Migadu) tem termos que a proíbem.
 
 ## 7. Decisão
 
-**Fornecedor: Purelymail, pendente de confirmação oficial.**
+**Fornecedor: Purelymail. API confirmada em fonte primária.**
 
-O Purelymail passa a ser o único candidato com termos compatíveis com o caso de uso.
-A API continua **não verificada em fonte primária**, pelo que o cliente só deve ser
-escrito depois da resposta do suporte (secção 8).
+A especificação oficial existe e foi lida directamente (secção "Fonte primária da
+API"): 19 endpoints, `createUser` com os campos esperados, autenticação por header
+`Purelymail-Api-Token`. Não é preciso comprar domínio próprio — os domínios partilhados
+existem e custam $0,02 a $0,20 por username e por ano.
+
+O que fica pendente é apenas o que a especificação **não diz**: os limites de password
+e se o `createUser` aceita domínio partilhado. Ambas as perguntas estão na secção 8.
 
 O Migadu está **riscado** por incompatibilidade de termos, apesar de a API ser
 perfeitamente documentada. Continua documentado neste ficheiro para referência, mas
@@ -252,10 +308,17 @@ resposta oficial; o gerador e a interface não dependem dele.
 **Estado: redigida, por enviar.** Enviar por <https://purelymail.com/support> e guardar
 a resposta nesta secção.
 
-> 1. What are the minimum and maximum password length accepted by `createUser`, and are
->    there any restrictions on special characters?
+> 1. What are the minimum and maximum password lengths accepted by `createUser`, and are
+>    there restrictions on special characters?
 > 2. Is the API (`/api/v0/createUser`) supported and intended for use by account owners
->    to manage their own mailboxes in bulk, or is it subject to restrictions?
+>    to manage their own mailboxes, or is it subject to restrictions?
+> 3. Does `createUser` accept a shared domain such as `purelymail.com` in `domainName`,
+>    and is the per-username charge billed through the API?
 
-A resposta a (1) define o máximo do slider. A resposta a (2) decide se o Purelymail é
-viável.
+A resposta a (1) define o máximo do slider. A resposta a (2) é a que confirma se a
+automação é aceite. A resposta a (3) decide se é preciso comprar domínio próprio.
+
+Quando abrires a conta (o trial dá créditos limitados), o teste real é: criar uma
+mailbox de teste, experimentar passwords curtas e longas para descobrir os limites, e
+apagar com `deleteUser`. A API key fica só em variável de ambiente — nunca no chat,
+nunca no repositório.

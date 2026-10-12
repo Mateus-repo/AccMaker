@@ -11,8 +11,11 @@ permanente** através da API de um fornecedor. No fim mostra email + password co
 
 ## Regras gerais
 - Responde e comenta em **português europeu (PT-PT)**. Código, nomes de variáveis e commits seguem a convenção abaixo.
-- Mailboxes **reais e permanentes**, num domínio do próprio utilizador ou de um fornecedor com API oficial.
+- Mailboxes **reais e permanentes**, num domínio do próprio utilizador, num domínio
+  partilhado do fornecedor, ou num fornecedor com API oficial.
   **Nunca** usar serviços de email temporário/descartável.
+- O `provider` recebe o **domínio como parâmetro**, para poder usar um domínio próprio
+  ou um domínio partilhado sem alterar código.
 - **Não implementar** bypass de CAPTCHA, verificação por telemóvel, rotação de IPs ou automação de
   sign-up em Gmail/Outlook/Yahoo e afins. Só APIs oficiais de administração de mailboxes.
 - Passwords geradas com **RNG criptográfico** (nunca `rand` normal). Nunca escrever passwords/API keys em logs.
