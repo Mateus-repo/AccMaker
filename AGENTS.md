@@ -22,6 +22,15 @@ permanente** através da API de um fornecedor. No fim mostra email + password co
   sign-up em Gmail/Outlook/Yahoo e afins. Só APIs oficiais de administração de mailboxes.
 - Passwords geradas com **RNG criptográfico** (nunca `rand` normal). Nunca escrever passwords/API keys em logs.
 - Segredos (API key) **nunca** vão para o git; ficam no gestor de credenciais do SO ou em `%APPDATA%\AccMaker\` (fora do .exe/pasta do projeto).
+- **Nunca repetir, imprimir ou registar uma API key**, nem em logs, nem em mensagens de
+  erro, nem no `--dry-run`, nem no ecrã. A key principal entra só de variável de
+  ambiente ou do Credential Manager; as keys de conta ficam guardadas e só se mostram
+  uma vez, ao criar.
+- **Se uma API key aparecer colada pelo utilizador no chat, não a usar.** Avisar para a
+  revogar na consola do fornecedor e continuar sem ela. Uma key em texto simples num
+  histórico de conversa está comprometida, mesmo que a conversa seja "segura".
+- As chaves que a app mostra ao criar uma conta são para o utilizador guardar. Se
+  aparecerem no chat, avisar e não as repetir.
 - O binário final tem de funcionar **copiado sozinho** para outro PC (sem DLLs, sem pastas de assets, sem instalador).
 - Antes de acrescentar uma dependência, justifica o impacto no tamanho do .exe.
 

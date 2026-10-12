@@ -31,6 +31,15 @@ pub struct AgentMail {
     ultimo_id: std::cell::RefCell<Option<String>>,
 }
 
+
+/// Cliente temporario com uma key especifica, para os testes de permissao.
+///
+/// A key entra por `String` e nunca e impressa nem registada. Usar so para
+/// responder a perguntas sobre o que uma key restrita consegue fazer.
+pub fn com_chave(chave: String) -> AgentMail {
+    AgentMail::novo(chave)
+}
+
 impl AgentMail {
     /// Cliente real. A chave tem de vir do cofre ou do ambiente, nunca de um
     /// argumento de linha de comandos.
@@ -159,6 +168,28 @@ impl AgentMail {
     }
 
     
+/// Estado HTTP de um pedido, sem consumir a resposta. Para os testes que so
+    /// precisam de saber se passou ou falhou.
+    pub fn estado_de(&self, metodo: &str, caminho: &str, corpo: Option<&str>) -> Result<u16, Erro> {
+        match self.enviar(metodo, caminho, corpo) {
+            Ok(_) => Ok(200),
+            Err(Erro::Api { estado, .. }) => Ok(estado),
+            Err(Erro::RespostaInesperada { estado }) => Ok(estado.unwrap_or(0)),
+            Err(Erro::NaoEncontrado) => Ok(404),
+            Err(Erro::CredenciaisInvalidas) => Ok(401),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Cria uma key restrita numa inbox que ja existe, e devolve o valor.
+    ///
+    /// E o teste da pergunta 7: se isto funcionar, uma conta nunca fica sem
+    /// chave, porque basta criar outra.
+    pub fn criar_key(&self, caminho: &str, corpo: &str) -> Result<String, Erro> {
+        let resposta = self.enviar("POST", caminho, Some(corpo))?;
+        Self::campo(&resposta, "api_key").ok_or(Erro::RespostaInesperada { estado: None })
+    }
+
 /// Corpo JSON da lista de API keys de uma inbox.
     fn corpo_das_keys(&self, inbox_id: &str) -> Result<String, Erro> {
         let caminho = format!("/v0/inboxes/{}/api-keys", inbox_id);

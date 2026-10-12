@@ -182,6 +182,8 @@ fn main() {
         "criar" => cmd_criar(&f, &a, &cofre),
         "apagar" => cmd_apagar(&f, &a),
         "trocar" => cmd_trocar(&f, &a),
+        "testar-chave" => cmd_testar_chave(&a),
+        "criar-chave" => cmd_criar_chave(&a),
         outro => Err(format!(
             "comando desconhecido: {}. Vê `accmaker ajuda`.",
             outro
@@ -195,6 +197,90 @@ fn main() {
             std::process::exit(1);
         }
     }
+}
+
+/// Teste da pergunta 6: uma key restrita a uma inbox consegue apagar essa
+/// mesma inbox?
+///
+/// A key entra pela variavel `ACCMAILER_CHAVE_TESTE`, que o utilizador define
+/// com `Read-Host` para nao ficar no historico. Nunca e impressa.
+fn cmd_testar_chave(a: &Args) -> Result<(), String> {
+    let id = match &a.inbox_id {
+        Some(i) => i.clone(),
+        None => return Err("falta o id da inbox.".into()),
+    };
+    let chave = match std::env::var("ACCMAILER_CHAVE_TESTE") {
+        Ok(k) if !k.trim().is_empty() => k,
+        _ => {
+            return Err(
+                "Define primeiro ACCMAILER_CHAVE_TESTE com a key restrita DESSA inbox:\n  \
+                 $env:ACCMAILER_CHAVE_TESTE = Read-Host 'Chave restrita da inbox'"
+                    .into(),
+            )
+        }
+    };
+
+    let cliente = agentmail::com_chave(chave);
+    println!("A testar se a key restrita apaga a propria inbox...");
+
+    // DELETE na propria inbox, com a key restrita dela.
+    let caminho = format!("/v0/inboxes/{}", id);
+    match cliente.estado_de("DELETE", &caminho, None) {
+        Ok(codigo) if (200..300).contains(&codigo) => {
+            println!();
+            println!("RESULTADO: a key restrita APAGA a propria inbox.");
+            println!("Isto muda o desenho da janela: a key nao pode ficar");
+            println!("visivel no ecra, so um botao de copiar.");
+        }
+        Ok(codigo) => {
+            println!();
+            println!("RESULTADO: a key restrita NAO apaga a inbox (estado {}).", codigo);
+            println!("A conta nao pode ser destruida por quem tenha so a key,");
+            println!("por isso mostra-la no ecra e aceitavel.");
+        }
+        Err(e) => {
+            println!();
+            println!("RESULTADO: inconclusive ({})", e);
+            println!("A inbox pode ter ficado orfa. Confirma com `accmaker listar`.");
+        }
+    }
+    Ok(())
+}
+
+/// Teste da pergunta 7: da para criar uma segunda key para uma inbox que ja
+/// existe? Se sim, uma conta nunca fica sem chave.
+fn cmd_criar_chave(a: &Args) -> Result<(), String> {
+    let id = match &a.inbox_id {
+        Some(i) => i.clone(),
+        None => return Err("falta o id da inbox.".into()),
+    };
+    if !confirmar(a, "Criar uma key nova para essa inbox?") {
+        return Ok(());
+    }
+    let f = agentmail::com_chave(ler_key_organizacao()?);
+    let caminho = format!("/v0/inboxes/{}/api-keys", id);
+    let corpo = r#"{"name":"accmaker-extra"}"#;
+    match f.criar_key(&caminho, corpo) {
+        Ok(chave) => {
+            println!();
+            println!("RESULTADO: deu para criar outra key para a mesma inbox.");
+            println!("Guarda-a: e a resposta a pergunta 7.");
+            println!();
+            println!("  Chave:  {}", chave);
+            println!();
+            println!("Nao a partilhes no chat.");
+        }
+        Err(e) => {
+            println!();
+            println!("RESULTADO: nao deu para criar outra key ({}).", e);
+        }
+    }
+    Ok(())
+}
+
+fn ler_key_organizacao() -> Result<String, String> {
+    let cofre = CofreWindows;
+    cofre::ler_api_key(&cofre)
 }
 
 fn cmd_listar(f: &AgentMail) -> Result<(), String> {
@@ -369,6 +455,8 @@ fn ajuda() {
     println!("  apagar <id>            apaga uma conta");
     println!("  trocar <id>            apaga uma conta e cria outra");
     println!("  password               gera passwords (sem rede)");
+    println!("  testar-chave <id>      a key restrita apaga a propria inbox?");
+    println!("  criar-chave <id>       cria outra key para a mesma inbox");
     println!("  ajuda                  esta ajuda");
     println!();
     println!("OPCIONES");
