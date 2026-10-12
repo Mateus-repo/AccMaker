@@ -78,6 +78,9 @@ pub enum Erro {
     Rede,
     /// Demasiados pedidos. O valor vem do cabecalho `Retry-After`, em segundos.
     ExcessoDePedidos { esperar: u64 },
+    /// A API respondeu com um codigo ou uma mensagem que nao sabemos mapear.
+    /// Guarda o `code` e a `message` que ela devolveu, para nao adivinhar.
+    Api { estado: u16, code: String, mensagem: String },
     /// O username pedido ja esta em uso por outra inbox.
     NomeJaExiste,
     /// O fornecedor devolveu um codigo que nao sabemos tratar.
@@ -103,6 +106,21 @@ impl fmt::Display for Erro {
             ),
             Erro::ExcessoDePedidos { esperar } => {
                 write!(f, "Demasiados pedidos. Tenta de novo daqui a {} segundos.", esperar)
+            }
+            Erro::Api { estado, code, mensagem } => {
+                // O texto da propria API. E o unico jeito de saber o que
+                // aconteceu sem adivinhar.
+                if code.is_empty() && mensagem.is_empty() {
+                    write!(f, "A API respondeu {} sem explicacao.", estado)
+                } else {
+                    write!(
+                        f,
+                        "A API respondeu {} ({}): {}",
+                        estado,
+                        if code.is_empty() { "sem codigo" } else { code },
+                        if mensagem.is_empty() { "sem mensagem" } else { mensagem }
+                    )
+                }
             }
             Erro::NomeJaExiste => write!(f, "Esse username ja esta em uso. Escolhe outro."),
             Erro::RespostaInesperada { estado } => match estado {

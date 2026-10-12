@@ -79,7 +79,12 @@ impl AgentMail {
 
     fn erro_de_estado(codigo: u16, corpo: &str) -> Erro {
         match codigo {
-            401 | 403 => Erro::CredenciaisInvalidas,
+            401 => Erro::CredenciaisInvalidas,
+            403 => Erro::Api {
+                estado: codigo,
+                code: Self::campo(corpo, "code").unwrap_or_default(),
+                mensagem: Self::campo(corpo, "message").unwrap_or_default(),
+            },
             404 => Erro::NaoEncontrado,
             409 => Erro::RespostaInesperada { estado: Some(codigo) },
             422 => {
@@ -106,6 +111,11 @@ impl AgentMail {
                 let espera = extrair_numeros(corpo, "wait").unwrap_or(5);
                 Erro::ExcessoDePedidos { esperar: espera }
             }
+            _ if (400..500).contains(&codigo) => Erro::Api {
+                estado: codigo,
+                code: Self::campo(corpo, "code").unwrap_or_default(),
+                mensagem: Self::campo(corpo, "message").unwrap_or_default(),
+            },
             _ => Erro::RespostaInesperada { estado: Some(codigo) },
         }
     }
@@ -401,7 +411,7 @@ mod testes {
             AgentMail::erro_de_estado(401, ""),
             Erro::CredenciaisInvalidas
         );
-        assert_eq!(AgentMail::erro_de_estado(403, ""), Erro::CredenciaisInvalidas);
+        assert_eq!(AgentMail::erro_de_estado(403, ""), Erro::Api { estado: 403, code: String::new(), mensagem: String::new() });
         assert_eq!(AgentMail::erro_de_estado(404, ""), Erro::NaoEncontrado);
         assert_eq!(
             AgentMail::erro_de_estado(422, r#"{"code":"inbox_limit_reached"}"#),
@@ -412,7 +422,19 @@ mod testes {
             AgentMail::erro_de_estado(500, ""),
             Erro::RespostaInesperada { estado: Some(500) }
         );
-        // O corpo traz o `code` estavel da API. E ele que diz se e
+        // A 403 e a 401 sao coisas diferentes: a 401 e a key, a 403 e a permissao.
+        // A 403 traz o `code` e a `message` da propria API.
+        assert_eq!(
+            AgentMail::erro_de_estado(
+                403,
+                r#"{"code":"inbox_create_forbidden","message":"no permission"}"#
+            ),
+            Erro::Api {
+                estado: 403,
+                code: "inbox_create_forbidden".to_string(),
+                mensagem: "no permission".to_string()
+            }
+        );
         // limite de inboxes ou username ja em uso.
         assert_eq!(
             AgentMail::erro_de_estado(422, r#"{"code":"username_already_exists"}"#),
