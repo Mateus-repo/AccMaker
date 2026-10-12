@@ -9,7 +9,7 @@
 
 use crate::cofre::mascarar;
 use crate::provider::{Credenciais, Erro, Fornecedor, Inbox};
-use ureq::Agent;
+use ureq::config::Config;
 
 /// Base da API.
 pub const BASE: &str = "https://api.agentmail.to";
@@ -77,40 +77,51 @@ impl AgentMail {
         println!("--- fim do pedido ---");
     }
 
-    /// Traduz o estado HTTP num erro nosso, sem nunca incluir a chave.
     fn erro_de_estado(codigo: u16, corpo: &str) -> Erro {
-        // `corpo` so e usado nos casos em que a API devolve o corpo no erro.
-        let _ = corpo;
         match codigo {
             401 | 403 => Erro::CredenciaisInvalidas,
             404 => Erro::NaoEncontrado,
+            409 => Erro::RespostaInesperada { estado: Some(codigo) },
             422 => {
-                // A API traz `code` estavel. O de limite, se vier, mapeia para
-                // o erro certo em vez de "resposta inesperada".
-                if corpo.contains("inbox_limit")
-                    || corpo.contains("too_many_inboxes")
-                    || corpo.contains("limit_reached")
+                // A API traz um campo `code` estavel no corpo. E por ai que
+                // se sabe se e limite de inboxes ou username ja em uso.
+                let c = Self::campo(corpo, "code").unwrap_or_default();
+                if c.contains("inbox_limit")
+                    || c.contains("too_many_inboxes")
+                    || c.contains("limit_reached")
+                    || c.contains("max_inboxes")
                 {
                     Erro::LimiteAtingido { maximo: 3 }
+                } else if c.contains("already_exists")
+                    || c.contains("duplicate")
+                    || c.contains("in_use")
+                    || c.contains("taken")
+                {
+                    Erro::NomeJaExiste
                 } else {
-                    Erro::RespostaInesperada
+                    Erro::RespostaInesperada { estado: Some(codigo) }
                 }
             }
             429 => {
                 let espera = extrair_numeros(corpo, "wait").unwrap_or(5);
                 Erro::ExcessoDePedidos { esperar: espera }
             }
-            _ => Erro::RespostaInesperada,
+            _ => Erro::RespostaInesperada { estado: Some(codigo) },
         }
     }
-
     /// Envia um pedido e devolve o corpo em texto.
     fn enviar(&self, metodo: &str, caminho: &str, corpo: Option<&str>) -> Result<String, Erro> {
         if self.dry_run {
             self.mostrar(metodo, caminho, corpo);
             return Ok(String::new());
         }
-        let agente = Agent::new_with_defaults();
+        // Sem isto o ureq transforma qualquer 4xx/5xx num erro e perde o corpo,
+// que e onde a AgentMail poe o `code` estavel.
+        let agente = ureq::Agent::new_with_config(
+            Config::builder()
+                .http_status_as_error(false)
+                .build(),
+        );
         let url = format!("{}{}", BASE, caminho);
         let resposta = match metodo {
             "GET" => agente.get(&url).header(CABECALHO_AUTH, &format!("Bearer {}", self.chave)).call(),
@@ -136,8 +147,8 @@ impl AgentMail {
                 Ok(texto)
             }
             Err(ureq::Error::StatusCode(codigo)) => {
-                // O ureq traduz 4xx e 5xx para este erro. O corpo não vem
-                // aqui, por isso o mapeamento usa so o codigo HTTP.
+                // O corpo nao vem no erro do ureq; fica perdido. O mapeamento
+                // usa so o codigo HTTP.
                 Err(Self::erro_de_estado(codigo, ""))
             }
             Err(_) => Err(Erro::Rede),
@@ -243,8 +254,8 @@ impl Fornecedor for AgentMail {
         }
 
         let resposta = self.enviar("POST", "/v0/inboxes", Some(&corpo))?;
-        let id = Self::campo(&resposta, "inbox_id").ok_or(Erro::RespostaInesperada)?;
-        let email = Self::campo(&resposta, "email").ok_or(Erro::RespostaInesperada)?;
+        let id = Self::campo(&resposta, "inbox_id").ok_or(Erro::RespostaInesperada { estado: None })?;
+        let email = Self::campo(&resposta, "email").ok_or(Erro::RespostaInesperada { estado: None })?;
 
         // O AgentMail nao tem password: a "password" e uma API key restrita
         // a esta inbox.
@@ -253,7 +264,7 @@ impl Fornecedor for AgentMail {
         );
         let caminho = format!("/v0/inboxes/{}/api-keys", id);
         let resposta_key = self.enviar("POST", &caminho, Some(&pedido_key))?;
-        let chave = Self::campo(&resposta_key, "api_key").ok_or(Erro::RespostaInesperada)?;
+        let chave = Self::campo(&resposta_key, "api_key").ok_or(Erro::RespostaInesperada { estado: None })?;
         *self.ultimo_id.borrow_mut() = Some(id);
 
         Ok(Credenciais { email, password: chave })
@@ -344,7 +355,26 @@ mod testes {
         assert_eq!(AgentMail::erro_de_estado(429, ""), Erro::ExcessoDePedidos { esperar: 5 });
         assert_eq!(
             AgentMail::erro_de_estado(500, ""),
-            Erro::RespostaInesperada
+            Erro::RespostaInesperada { estado: Some(500) }
+        );
+        // O corpo traz o `code` estavel da API. E ele que diz se e
+        // limite de inboxes ou username ja em uso.
+        assert_eq!(
+            AgentMail::erro_de_estado(422, r#"{"code":"username_already_exists"}"#),
+            Erro::NomeJaExiste
+        );
+        assert_eq!(
+            AgentMail::erro_de_estado(422, r#"{"code":"inbox_limit_reached"}"#),
+            Erro::LimiteAtingido { maximo: 3 }
+        );
+        // Estados que nao sabemos tratar dizem qual foi.
+        assert_eq!(
+            AgentMail::erro_de_estado(503, ""),
+            Erro::RespostaInesperada { estado: Some(503) }
+        );
+        assert_eq!(
+            format!("{}", Erro::RespostaInesperada { estado: Some(503) }),
+            "O fornecedor devolveu uma resposta inesperada (estado 503)."
         );
     }
 

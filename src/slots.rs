@@ -54,7 +54,7 @@ pub fn trocar(f: &dyn Fornecedor, inbox_id: &str, username: Option<&str>, client
     let depois = apagar(f, inbox_id)?;
     if depois.capacidade.cheia() {
         // A vaga nao libertou-se. Nao criar: devolve o estado real.
-        return Err(Erro::RespostaInesperada);
+        return Err(Erro::RespostaInesperada { estado: None });
     }
     criar(f, username, client_id)
 }

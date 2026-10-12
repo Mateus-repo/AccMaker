@@ -78,8 +78,11 @@ pub enum Erro {
     Rede,
     /// Demasiados pedidos. O valor vem do cabecalho `Retry-After`, em segundos.
     ExcessoDePedidos { esperar: u64 },
-    /// O fornecedor devolveu algo que nao percebo.
-    RespostaInesperada,
+    /// O username pedido ja esta em uso por outra inbox.
+    NomeJaExiste,
+    /// O fornecedor devolveu um codigo que nao sabemos tratar.
+    /// Guarda o estado HTTP, para o erro ser util ao diagnostico.
+    RespostaInesperada { estado: Option<u16> },
 }
 
 impl fmt::Display for Erro {
@@ -101,9 +104,15 @@ impl fmt::Display for Erro {
             Erro::ExcessoDePedidos { esperar } => {
                 write!(f, "Demasiados pedidos. Tenta de novo daqui a {} segundos.", esperar)
             }
-            Erro::RespostaInesperada => {
-                write!(f, "O fornecedor devolveu uma resposta inesperada.")
-            }
+            Erro::NomeJaExiste => write!(f, "Esse username ja esta em uso. Escolhe outro."),
+            Erro::RespostaInesperada { estado } => match estado {
+                Some(e) => write!(
+                    f,
+                    "O fornecedor devolveu uma resposta inesperada (estado {}).",
+                    e
+                ),
+                None => write!(f, "O fornecedor devolveu uma resposta inesperada."),
+            },
         }
     }
 }
