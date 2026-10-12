@@ -1,0 +1,16 @@
+# build
+/target/
+/dist/
+/build/
+*.exe
+*.pdb
+# segredos
+.env
+*.key
+config.local.*
+secrets.*
+# SO / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

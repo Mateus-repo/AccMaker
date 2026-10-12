@@ -1,0 +1,50 @@
+# AGENTS.md — AccMaker
+
+Instruções para o agente (opencode). Lê este ficheiro **no início de cada sessão**.
+
+## Objetivo do projeto
+App **standalone** (um único `.exe`, sem ficheiros ao lado) e **muito leve** que cria
+contas de email com password de forma rápida:
+o utilizador escolhe o domínio, o username (manual ou aleatório) e o **tamanho
+máximo da password**; a app gera uma password forte e cria a **mailbox real e
+permanente** através da API de um fornecedor. No fim mostra email + password com botão de copiar.
+
+## Regras gerais
+- Responde e comenta em **português europeu (PT-PT)**. Código, nomes de variáveis e commits seguem a convenção abaixo.
+- Mailboxes **reais e permanentes**, num domínio do próprio utilizador ou de um fornecedor com API oficial.
+  **Nunca** usar serviços de email temporário/descartável.
+- **Não implementar** bypass de CAPTCHA, verificação por telemóvel, rotação de IPs ou automação de
+  sign-up em Gmail/Outlook/Yahoo e afins. Só APIs oficiais de administração de mailboxes.
+- Passwords geradas com **RNG criptográfico** (nunca `rand` normal). Nunca escrever passwords/API keys em logs.
+- Segredos (API key) **nunca** vão para o git; ficam no gestor de credenciais do SO ou em `%APPDATA%\AccMaker\` (fora do .exe/pasta do projeto).
+- O binário final tem de funcionar **copiado sozinho** para outro PC (sem DLLs, sem pastas de assets, sem instalador).
+- Antes de acrescentar uma dependência, justifica o impacto no tamanho do .exe.
+
+## Skills disponíveis (`.opencode/skills/`)
+| Skill | Quando usar |
+|---|---|
+| `pesquisar-api-email` | No início do projeto ou quando for preciso trocar/validar o fornecedor de API de email |
+| `build-exe-leve` | Escolha da linguagem, flags de compilação e verificação do tamanho do .exe |
+| `estilizacao` | Sempre que mexeres na interface (cores, layout, tipografia) |
+| `progresso` | **No fim de cada tarefa**: atualizar `progresso.md` |
+| `auto-commit` | **No fim de cada tarefa concluída**: commit automático (depois de `progresso`) |
+
+## Fluxo obrigatório por tarefa
+1. Ler `progresso.md` para saber o estado atual.
+2. Implementar a tarefa (pequena e focada).
+3. Compilar e testar (`build-exe-leve` indica como medir o tamanho).
+4. Aplicar a skill `progresso` (atualiza `progresso.md`).
+5. Aplicar a skill `auto-commit` (commit com mensagem convencional; push só se o remote existir).
+
+## Ordem sugerida do projeto
+1. `pesquisar-api-email` → gerar `docs/pesquisa-api-email.md` e propor fornecedor.
+2. Escolher linguagem com `build-exe-leve` e criar esqueleto.
+3. Gerador de passwords (CLI/teste primeiro, sem rede).
+4. Cliente da API (com modo `--dry-run` que não cria nada).
+5. Interface (`estilizacao`).
+6. Release: .exe final < alvo de tamanho definido em `progresso.md`.
+
+## Convenções
+- Commits: `tipo(âmbito): descrição` em PT-PT — `feat`, `fix`, `refactor`, `docs`, `chore`, `style`, `test`.
+- Um commit por tarefa concluída. Nunca `git push --force`.
+- Ficheiros de documentação em `docs/`; estado do projeto em `progresso.md` (raiz).
