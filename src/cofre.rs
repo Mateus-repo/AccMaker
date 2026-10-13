@@ -226,6 +226,39 @@ pub fn mascarar(chave: &str) -> String {
 mod testes {
     use super::*;
 
+    /// Limpa as variaveis de ambiente das keys e restaura-as no fim, para os
+    /// testes nao dependerem de como a shell foi iniciada.
+    struct Guardas(Vec<(String, Option<String>)>);
+
+    impl Guardas {
+        fn novo() -> Self {
+            let g = Guardas(
+                ["AGENTMAIL_API_KEY", "ACCMAILER_API_KEY"]
+                    .iter()
+                    .map(|n| (n.to_string(), std::env::var(n).ok()))
+                    .collect(),
+            );
+            for (n, _) in &g.0 {
+                std::env::remove_var(n);
+            }
+            g
+        }
+    }
+
+    impl Drop for Guardas {
+        fn drop(&mut self) {
+            for (n, v) in &self.0 {
+                match v {
+                    Some(valor) => std::env::set_var(n, valor),
+                    None => std::env::remove_var(n),
+                }
+            }
+        }
+    }
+
+    type AmbienteLimpo = Guardas;
+
+
     #[test]
     fn mascarar_nao_revela_a_chave() {
         let c = "amk_1234567890abcdef";
@@ -260,26 +293,26 @@ mod testes {
         assert_eq!(c.quantas(), 0, "nada foi guardado");
     }
 
+
     #[test]
-    fn ler_api_key_vem_do_ambiente_primeiro() {
-        let c = CofreFalso::novo();
-        c.gravar("api-key-principal", "do-cofre").unwrap();
+    fn de_onde_vem_a_api_key() {
+        // Um so teste: os testes correm em paralelo e as variaveis de
+        // ambiente sao do processo inteiro, partilhadas por todos.
+        let guard = AmbienteLimpo::novo();
+
+        // 1. Sem nada em lado nenhum, da erro.
+        let vazio = CofreFalso::novo();
+        assert!(ler_api_key(&vazio).is_err(), "1: devia dar erro");
+
+        // 2. Com uma chave no cofre, usa-a.
+        let cofre = CofreFalso::novo();
+        cofre.gravar("api-key-principal", "do-cofre").unwrap();
+        assert_eq!(ler_api_key(&cofre).unwrap(), "do-cofre", "2: devia usar o cofre");
+
+        // 3. A variavel de ambiente ganha sobre o cofre.
         std::env::set_var("AGENTMAIL_API_KEY", "do-ambiente");
-        let k = ler_api_key(&c).unwrap();
-        std::env::remove_var("AGENTMAIL_API_KEY");
-        assert_eq!(k, "do-ambiente");
-    }
+        assert_eq!(ler_api_key(&cofre).unwrap(), "do-ambiente", "3: o ambiente ganha");
 
-    #[test]
-    fn ler_api_key_cai_para_o_cofre() {
-        let c = CofreFalso::novo();
-        c.gravar("api-key-principal", "do-cofre").unwrap();
-        assert_eq!(ler_api_key(&c).unwrap(), "do-cofre");
-    }
-
-    #[test]
-    fn ler_api_key_da_erro_sem_nada() {
-        let c = CofreFalso::novo();
-        assert!(ler_api_key(&c).is_err());
+        drop(guard);
     }
 }

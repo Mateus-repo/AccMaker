@@ -5,6 +5,7 @@
 
 mod agentmail;
 mod cofre;
+mod janela;
 mod password;
 mod provider;
 mod rng;
@@ -153,6 +154,11 @@ fn main() {
                 }
             }
         }
+        return;
+    }
+
+    if a.comando == "interface" {
+        janela::abrir("accmaker");
         return;
     }
 
@@ -494,6 +500,7 @@ fn ajuda() {
     println!("  criar                  cria uma conta nova (pede confirmacao)");
     println!("  apagar <id>            apaga uma conta");
     println!("  trocar <id>            apaga uma conta e cria outra");
+    println!("  interface              abre a janela");
     println!("  password               gera passwords (sem rede)");
     println!("  testar-chave <id>      a key restrita apaga a propria inbox?");
     println!("  criar-chave <id>       cria outra key para a mesma inbox");
